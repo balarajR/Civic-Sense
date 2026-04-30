@@ -239,6 +239,76 @@ Additional quality gates:
 
 ---
 
+## 🚀 Deployment (GitHub Actions → Cloud Run)
+
+The project ships with a **zero-downtime CI/CD pipeline** that automatically deploys every push to `main`.
+
+### Pipeline Overview
+
+```
+Push to main
+    │
+    ▼
+┌─────────────────────┐
+│  🧪 CI Job          │  TypeScript check + 21 Vitest tests
+└─────────┬───────────┘
+          │ pass
+          ▼
+┌─────────────────────┐
+│  🐳 Build Image     │  docker build (multi-stage, Vite baked in)
+│  📤 Push to AR      │  Artifact Registry (us-central1)
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  ☁️  Cloud Run      │  Serverless, auto-scales 0→5 instances
+│  Deploy             │  Secrets from Secret Manager
+└─────────────────────┘
+```
+
+### One-Time GCP Setup
+
+```bash
+# 1. Authenticate
+gcloud auth login
+gcloud config set project civic-sence
+
+# 2. Run the bootstrap script (creates SA, Artifact Registry, WIF)
+chmod +x scripts/setup-gcp.sh
+./scripts/setup-gcp.sh
+
+# 3. Add secret values to Secret Manager
+echo -n "your-gemini-key" | gcloud secrets versions add GEMINI_API_KEY --data-file=-
+```
+
+### GitHub Secrets Required
+
+Go to **Settings → Secrets → Actions** in your GitHub repo and add:
+
+| Secret | Description |
+|--------|-------------|
+| `GCP_PROJECT_ID` | GCP project ID (e.g. `civic-sence`) |
+| `GCP_REGION` | Cloud Run region (e.g. `us-central1`) |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Output from `setup-gcp.sh` |
+| `GCP_SERVICE_ACCOUNT` | Output from `setup-gcp.sh` |
+| `VITE_FIREBASE_API_KEY` | Firebase web API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase app ID |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Firebase GA measurement ID |
+| `VITE_GOOGLE_MAPS_API_KEY` | Google Maps JS API key |
+| `APP_URL` | Cloud Run service URL (update after first deploy) |
+
+> **Note:** `GEMINI_API_KEY` and `DATA_GOV_IN_API_KEY` are stored in **GCP Secret Manager** (not GitHub Secrets) and injected at Cloud Run runtime.
+
+### Manual Deploy
+
+Trigger a deployment manually from the **Actions** tab → **CI → Deploy to Cloud Run** → **Run workflow**.
+
+---
+
 ## 📜 License
 
 MIT — Built for Indian democracy with ❤️ and AI.

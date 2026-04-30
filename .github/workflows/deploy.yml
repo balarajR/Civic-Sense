@@ -1,0 +1,165 @@
+name: CI → Deploy to Cloud Run
+
+# ── Triggers ────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # Allow manual deploys from GitHub UI
+
+# ── Global env ──────────────────────────────────────────────────────────────
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  SERVICE_NAME: civicsense
+  AR_REPO: civicsense-repo
+  IMAGE_NAME: civicsense
+
+# ── Jobs ────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── Job 1: CI — Test & Type Check ─────────────────────────────────────────
+  ci:
+    name: 🧪 Test & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Run test suite (21 tests)
+        run: npm test
+
+  # ── Job 2: Deploy — Build image & deploy to Cloud Run ─────────────────────
+  deploy:
+    name: 🚀 Build & Deploy
+    needs: ci
+    runs-on: ubuntu-latest
+
+    # Only deploy on pushes to main (not PRs)
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+
+    # Required for Workload Identity Federation (keyless GCP auth)
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Auth ──────────────────────────────────────────────────────────────
+      - name: Authenticate to Google Cloud (Workload Identity)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      # ── Docker Registry ───────────────────────────────────────────────────
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # ── Build & Push ──────────────────────────────────────────────────────
+      - name: Build Docker image
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+          docker build \
+            --build-arg VITE_FIREBASE_API_KEY="${{ secrets.VITE_FIREBASE_API_KEY }}" \
+            --build-arg VITE_FIREBASE_AUTH_DOMAIN="${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}" \
+            --build-arg VITE_FIREBASE_PROJECT_ID="${{ secrets.VITE_FIREBASE_PROJECT_ID }}" \
+            --build-arg VITE_FIREBASE_STORAGE_BUCKET="${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}" \
+            --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}" \
+            --build-arg VITE_FIREBASE_APP_ID="${{ secrets.VITE_FIREBASE_APP_ID }}" \
+            --build-arg VITE_FIREBASE_MEASUREMENT_ID="${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}" \
+            --build-arg VITE_GOOGLE_MAPS_API_KEY="${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}" \
+            --tag "$IMAGE" \
+            --label "git-commit=${{ github.sha }}" \
+            --label "git-branch=${{ github.ref_name }}" \
+            .
+
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Push image to Artifact Registry
+        run: docker push "${{ env.IMAGE }}"
+
+      # ── Also tag as 'latest' for easy reference ───────────────────────────
+      - name: Tag image as latest
+        run: |
+          LATEST="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:latest"
+          docker tag "${{ env.IMAGE }}" "$LATEST"
+          docker push "$LATEST"
+
+      # ── Deploy ────────────────────────────────────────────────────────────
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE }}
+
+          # Runtime environment variables (server-side, non-secret)
+          env_vars: |
+            NODE_ENV=production
+            GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            GCP_LOCATION=${{ secrets.GCP_REGION }}
+            APP_URL=${{ secrets.APP_URL }}
+
+          # Secrets from Secret Manager (injected as env vars at runtime)
+          secrets: |
+            GEMINI_API_KEY=GEMINI_API_KEY:latest
+            DATA_GOV_IN_API_KEY=DATA_GOV_IN_API_KEY:latest
+
+          # Cloud Run configuration
+          flags: |
+            --allow-unauthenticated
+            --port=3000
+            --min-instances=0
+            --max-instances=5
+            --memory=512Mi
+            --cpu=1
+            --timeout=60s
+            --concurrency=80
+
+      # ── Summary ───────────────────────────────────────────────────────────
+      - name: Print deployment URL
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════╗"
+          echo "  ✅ CivicSense deployed successfully!"
+          echo "  🌐 URL: ${{ steps.deploy.outputs.url }}"
+          echo "  📦 Image: ${{ env.IMAGE }}"
+          echo "  🔖 Commit: ${{ github.sha }}"
+          echo "╚══════════════════════════════════════════════════════════╝"
+          echo ""
+
+      # Write a GitHub Step Summary for easy access in the Actions UI
+      - name: Write deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Service** | \`${{ env.SERVICE_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Region** | \`${{ env.REGION }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | ${{ steps.deploy.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image** | \`${{ env.IMAGE }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
