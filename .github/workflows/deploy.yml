@@ -116,17 +116,14 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.IMAGE }}
 
-          # Runtime environment variables (server-side, non-secret)
+          # Runtime environment variables injected from GitHub Secrets
           env_vars: |
             NODE_ENV=production
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
             GCP_LOCATION=${{ secrets.GCP_REGION }}
             APP_URL=${{ secrets.APP_URL }}
-
-          # Secrets from Secret Manager (injected as env vars at runtime)
-          secrets: |
-            GEMINI_API_KEY=GEMINI_API_KEY:latest
-            DATA_GOV_IN_API_KEY=DATA_GOV_IN_API_KEY:latest
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            DATA_GOV_IN_API_KEY=${{ secrets.DATA_GOV_IN_API_KEY }}
 
           # Cloud Run configuration
           flags: |
@@ -138,7 +135,6 @@ jobs:
             --cpu=1
             --timeout=60s
             --concurrency=80
-            --service-account=civicsense-deployer@civic-sence.iam.gserviceaccount.com
 
       # ── Summary ───────────────────────────────────────────────────────────
       - name: Print deployment URL
