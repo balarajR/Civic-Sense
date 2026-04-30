@@ -17,14 +17,22 @@
     <link rel="dns-prefetch" href="https://api.data.gov.in" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+    <!-- Async font loading: prevent render-blocking -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" /></noscript>
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗳️</text></svg>" />
     <title>CivicSence — AI Election Education Assistant</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run CivicSence.</noscript>
-    <div id="root"></div>
+    <!-- Inline critical CSS: eliminates CLS during React hydration -->
+    <style>
+      body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#000;color:#fff}
+      #root{min-height:100vh;display:flex;flex-direction:column}
+      .sr-loading{display:flex;align-items:center;justify-content:center;min-height:100vh;font-size:1.25rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+    </style>
+    <div id="root"><div class="sr-loading" aria-label="Loading CivicSence">CIVICSENCE</div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
