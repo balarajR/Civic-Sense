@@ -138,6 +138,7 @@ jobs:
             --cpu=1
             --timeout=60s
             --concurrency=80
+            --service-account=civicsense-deployer@civic-sence.iam.gserviceaccount.com
 
       # ── Summary ───────────────────────────────────────────────────────────
       - name: Print deployment URL
