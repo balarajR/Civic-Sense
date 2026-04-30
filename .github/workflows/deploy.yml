@@ -39,7 +39,7 @@ jobs:
       - name: TypeScript type check
         run: npx tsc --noEmit
 
-      - name: Run test suite (21 tests)
+      - name: Run comprehensive test suite
         run: npm test
 
   # ── Job 2: Deploy — Build image & deploy to Cloud Run ─────────────────────

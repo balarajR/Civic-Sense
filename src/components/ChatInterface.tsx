@@ -128,12 +128,15 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, dete
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="TYPE_YOUR_QUERY_HERE..."
-            className="flex-1 bg-slate-50 border-2 border-black p-4 text-sm font-bold uppercase placeholder:opacity-30 focus:outline-none focus:bg-white transition-all shadow-inner"
+            aria-label="Type your query to CivicSence assistant"
+            autoComplete="off"
+            className="flex-1 bg-slate-50 border-2 border-black p-4 text-sm font-bold uppercase placeholder:opacity-30 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500 transition-all shadow-inner"
             disabled={isLoading}
           />
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
+            aria-label="Send message"
             className="bg-orange-500 text-black border-2 border-black px-6 font-black uppercase text-sm hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all bold-shadow disabled:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             SEND →

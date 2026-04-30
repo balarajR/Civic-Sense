@@ -13,4 +13,25 @@ export default defineConfig({
   server: {
     hmr: process.env.DISABLE_HMR !== 'true',
   },
+  build: {
+    // Code-splitting: break monolithic bundle into cacheable vendor chunks
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-motion': ['motion', 'framer-motion'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-markdown': ['react-markdown'],
+        },
+      },
+    },
+    // Increase chunk warning limit — vendor chunks are expected to be larger
+    chunkSizeWarningLimit: 300,
+    // Generate source maps for production debugging
+    sourcemap: false,
+    // Minification
+    minify: 'esbuild',
+    // Target modern browsers for smaller output
+    target: 'es2020',
+  },
 });
