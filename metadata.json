@@ -1,0 +1,13 @@
+{
+  "name": "CivicSence",
+  "description": "An intelligent, politically neutral election education assistant for India, providing state-level awareness for Karnataka and interactive civic tools.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "Gemini AI",
+    "Interactive Journey Simulator",
+    "Civic Quiz Engine",
+    "Election Timeline Builder"
+  ]
+}

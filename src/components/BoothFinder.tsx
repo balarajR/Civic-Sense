@@ -1,0 +1,100 @@
+import React, { useState } from 'react';
+import { motion } from 'motion/react';
+import { MapPin, Search, Navigation, Info, ExternalLink } from 'lucide-react';
+import { cn } from '../lib/utils';
+
+export default function BoothFinder() {
+  const [address, setAddress] = useState('');
+  const [showMap, setShowMap] = useState(false);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (address.trim()) {
+      setShowMap(true);
+    }
+  };
+
+  // Mock location for Bengaluru polling station for demo
+  const mapUrl = `https://www.google.com/maps/embed/v1/place?key=REPLACE_WITH_GOOGLE_MAPS_API_KEY&q=Polling+Station+Bengaluru+Karnataka`;
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest leading-none">Booth Locator</h3>
+        <p className="text-xs font-bold text-slate-500 italic">Enter your EPIC number or locality to find your assigned booth.</p>
+      </div>
+
+      <form onSubmit={handleSearch} className="space-y-4">
+        <div className="relative">
+          <input 
+            type="text" 
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="ENTER_LOCALITY_OR_EPIC_ID..."
+            className="w-full bg-slate-50 border-2 border-black p-4 text-sm font-bold uppercase placeholder:opacity-30 focus:outline-none focus:bg-white transition-all shadow-inner"
+          />
+          <button 
+            type="submit"
+            className="absolute right-2 top-2 bottom-2 bg-black text-white px-4 font-black text-xs uppercase hover:bg-slate-800 transition-colors"
+          >
+            <Search size={16} strokeWidth={3} />
+          </button>
+        </div>
+      </form>
+
+      {showMap ? (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4"
+        >
+          <div className="border-4 border-black bold-shadow bg-white overflow-hidden relative aspect-square lg:aspect-video">
+            <iframe
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              loading="lazy"
+              allowFullScreen
+              referrerPolicy="no-referrer-when-downgrade"
+              src={`https://www.google.com/maps/embed/v1/search?key=${(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || ''}&q=${encodeURIComponent(address + " polling station Karnataka")}`}
+            ></iframe>
+            
+            <div className="absolute bottom-4 left-4 right-4 bg-white border-2 border-black p-3 bold-shadow flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-orange-500 border-2 border-black flex items-center justify-center">
+                    <MapPin size={16} strokeWidth={3} />
+                </div>
+                <div>
+                    <p className="text-[10px] font-black uppercase leading-none">Primary BoothFound</p>
+                    <p className="text-[9px] font-bold opacity-60">Within 1.2 KM of your location</p>
+                </div>
+              </div>
+              <button className="bg-black text-white p-2 border border-black hover:bg-slate-800">
+                <Navigation size={14} strokeWidth={3} />
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border-2 border-black p-4 flex gap-3 text-[10px] font-bold text-black uppercase italic leading-tight">
+            <Info size={16} strokeWidth={3} className="shrink-0 text-blue-600" />
+            <p>Verification Required: Always cross-check with your official voter slip distributed by the BLO.</p>
+          </div>
+
+          <a 
+            href="https:://electoralsearch.eci.gov.in" 
+            target="_blank" 
+            className="w-full flex items-center justify-center gap-2 border-2 border-black py-3 font-black uppercase text-xs hover:bg-slate-50 transition-all bold-shadow-hover"
+          >
+            OFFICIAL ECI PORTAL <ExternalLink size={14} strokeWidth={3} />
+          </a>
+        </motion.div>
+      ) : (
+        <div className="p-12 border-2 border-dashed border-slate-300 flex flex-col items-center text-center text-slate-400 space-y-4">
+            <MapPin size={48} strokeWidth={3} className="opacity-10" />
+            <p className="text-sm font-black uppercase italic">Map Terminal Offline</p>
+            <p className="text-xs font-bold">Input search parameters to initialize visual tracking.</p>
+        </div>
+      )}
+    </div>
+  );
+}
