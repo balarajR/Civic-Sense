@@ -17,13 +17,11 @@ const MODEL_ID = "gemini-2.5-flash";
 const DATA_GOV_BASE_URL = "https://api.data.gov.in/resource";
 
 // ────────────────────────────────────────────────────────────
-// Vertex AI Initialization
+// Gemini AI Initialization (API Key — works on Cloud Run)
 // ────────────────────────────────────────────────────────────
 
 const ai = new GoogleGenAI({
-  vertexai: true,
-  project: process.env.GCP_PROJECT_ID || "civic-sence",
-  location: process.env.GCP_LOCATION || "us-central1",
+  apiKey: process.env.GEMINI_API_KEY,
 });
 
 
@@ -102,6 +100,9 @@ Return a JSON object with this exact structure (no markdown fences):
 
 export async function createApp(): Promise<express.Express> {
   const app = express();
+
+  // Trust Cloud Run / GCP load balancer proxy (fixes rate-limiter X-Forwarded-For warning)
+  app.set("trust proxy", 1);
   
   // Security Hardening
   app.use(helmet({ contentSecurityPolicy: false })); // Disabled CSP for development with Vite
