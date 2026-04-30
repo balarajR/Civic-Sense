@@ -31,13 +31,16 @@ export default function BoothFinder() {
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             placeholder="ENTER_LOCALITY_OR_EPIC_ID..."
-            className="w-full bg-slate-50 border-2 border-black p-4 text-sm font-bold uppercase placeholder:opacity-30 focus:outline-none focus:bg-white transition-all shadow-inner"
+            aria-label="Enter your locality or EPIC ID to find your polling booth"
+            autoComplete="off"
+            className="w-full bg-slate-50 border-2 border-black p-4 text-sm font-bold uppercase placeholder:opacity-30 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500 transition-all shadow-inner"
           />
           <button 
             type="submit"
+            aria-label="Search for polling booth"
             className="absolute right-2 top-2 bottom-2 bg-black text-white px-4 font-black text-xs uppercase hover:bg-slate-800 transition-colors"
           >
-            <Search size={16} strokeWidth={3} />
+            <Search size={16} strokeWidth={3} aria-hidden="true" />
           </button>
         </div>
       </form>
@@ -50,6 +53,7 @@ export default function BoothFinder() {
         >
           <div className="border-4 border-black bold-shadow bg-white overflow-hidden relative aspect-square lg:aspect-video">
             <iframe
+              title="Google Maps polling booth location"
               width="100%"
               height="100%"
               style={{ border: 0 }}
@@ -69,8 +73,8 @@ export default function BoothFinder() {
                     <p className="text-[9px] font-bold opacity-60">Within 1.2 KM of your location</p>
                 </div>
               </div>
-              <button className="bg-black text-white p-2 border border-black hover:bg-slate-800">
-                <Navigation size={14} strokeWidth={3} />
+              <button className="bg-black text-white p-2 border border-black hover:bg-slate-800" aria-label="Navigate to polling booth">
+                <Navigation size={14} strokeWidth={3} aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -81,11 +85,13 @@ export default function BoothFinder() {
           </div>
 
           <a 
-            href="https:://electoralsearch.eci.gov.in" 
+            href="https://electoralsearch.eci.gov.in" 
             target="_blank" 
+            rel="noopener noreferrer"
+            aria-label="Open official ECI electoral search portal (opens in new tab)"
             className="w-full flex items-center justify-center gap-2 border-2 border-black py-3 font-black uppercase text-xs hover:bg-slate-50 transition-all bold-shadow-hover"
           >
-            OFFICIAL ECI PORTAL <ExternalLink size={14} strokeWidth={3} />
+            OFFICIAL ECI PORTAL <ExternalLink size={14} strokeWidth={3} aria-hidden="true" />
           </a>
         </motion.div>
       ) : (
