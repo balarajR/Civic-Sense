@@ -18,6 +18,10 @@ export default function CivicQuiz({ questions, onComplete }: CivicQuizProps) {
 
   const currentQuestion = questions[currentIndex];
 
+  if (!currentQuestion) {
+    return <div className="p-8 text-center font-bold">No questions available.</div>;
+  }
+
   const handleOptionSelect = (index: number) => {
     if (isAnswered) return;
     setSelectedOption(index);

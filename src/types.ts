@@ -22,7 +22,7 @@ export interface Message {
   timestamp: Date;
   persona?: Persona;
   mode?: InteractionMode;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface QuizQuestion {

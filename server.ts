@@ -1,5 +1,6 @@
 import "dotenv/config";
-import express, { Request, Response, NextFunction } from "express";
+import express, { Request, Response } from "express";
+import compression from "compression";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -7,6 +8,117 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { GoogleGenAI } from "@google/genai";
 import { sanitizeInput, safeJsonParse } from "./src/server/utils";
+
+// ────────────────────────────────────────────────────────────
+// Types — Strictly typed API response shapes
+// ────────────────────────────────────────────────────────────
+
+interface ChatMessage {
+  role: "user" | "assistant" | "model";
+  content: string;
+}
+
+interface ChatResponse {
+  reply: string;
+  detectedPersona: string;
+  currentMode: string;
+  nextAction: string;
+  uiData: Record<string, unknown>;
+}
+
+interface TimelineItem {
+  title: string;
+  date: string;
+  description: string;
+}
+
+interface CandidateRecord {
+  id: string;
+  name: string;
+  party: string;
+  education: string;
+  assets: string;
+  criminalCases: number | string;
+  profession: string;
+  partyLogo: string;
+  partyColor: string;
+}
+
+interface GovApiRecord {
+  candidate_id?: string;
+  candidate_name?: string;
+  party_name?: string;
+  education_qualifications?: string;
+  total_assets?: string;
+  criminal_cases?: number;
+  profession?: string;
+}
+
+interface GovApiResponse {
+  records?: GovApiRecord[];
+}
+
+interface ElectionParty {
+  name: string;
+  acronym: string;
+  won: number;
+  leading: number;
+  total: number;
+  color: string;
+}
+
+interface ElectionResults {
+  timestamp: string;
+  source: string;
+  status: string;
+  national: {
+    totalConstituencies: number;
+    declared: number;
+    leading: number;
+    parties: ElectionParty[];
+  };
+  turnout: {
+    nationalAverage: string;
+    highestState: { name: string; value: string };
+    lowestState: { name: string; value: string };
+  };
+}
+
+// ────────────────────────────────────────────────────────────
+// In-Memory Cache — TTL-based response caching for efficiency
+// ────────────────────────────────────────────────────────────
+
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+class ResponseCache {
+  private store = new Map<string, CacheEntry<unknown>>();
+
+  get<T>(key: string): T | null {
+    const entry = this.store.get(key) as CacheEntry<T> | undefined;
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      this.store.delete(key);
+      return null;
+    }
+    return entry.data;
+  }
+
+  set<T>(key: string, data: T, ttlMs: number): void {
+    this.store.set(key, { data, expiresAt: Date.now() + ttlMs });
+  }
+}
+
+const cache = new ResponseCache();
+
+const CACHE_TTL = {
+  NEWS: 5 * 60 * 1000,       // 5 minutes
+  TIMELINE: 10 * 60 * 1000,  // 10 minutes
+  RESULTS: 2 * 60 * 1000,    // 2 minutes (semi-real-time)
+  CANDIDATES: 15 * 60 * 1000, // 15 minutes
+} as const;
 
 // ────────────────────────────────────────────────────────────
 // Constants
@@ -24,8 +136,6 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-
-
 // ────────────────────────────────────────────────────────────
 // Utility: Fetch from data.gov.in Open Government Data API
 // ────────────────────────────────────────────────────────────
@@ -33,7 +143,7 @@ const ai = new GoogleGenAI({
 async function fetchGovData(
   resourceId: string,
   filters: Record<string, string> = {}
-): Promise<any | null> {
+): Promise<GovApiResponse | null> {
   const apiKey = process.env.DATA_GOV_IN_API_KEY;
   if (!apiKey) return null;
 
@@ -48,7 +158,7 @@ async function fetchGovData(
 
     const response = await fetch(url.toString());
     if (!response.ok) return null;
-    return await response.json();
+    return (await response.json()) as GovApiResponse;
   } catch (err) {
     console.error("Gov API fetch failed:", err);
     return null;
@@ -103,6 +213,9 @@ export async function createApp(): Promise<express.Express> {
 
   // Trust Cloud Run / GCP load balancer proxy (fixes rate-limiter X-Forwarded-For warning)
   app.set("trust proxy", 1);
+
+  // Gzip/Brotli Compression — reduces payload sizes by ~70%
+  app.use(compression());
   
   // Security Hardening
   app.use(helmet({ contentSecurityPolicy: false })); // Disabled CSP for development with Vite
@@ -123,13 +236,17 @@ export async function createApp(): Promise<express.Express> {
 
   // ── Health Check ────────────────────────────────────────
   app.get("/api/health", (_req: Request, res: Response) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    res.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      cacheKeys: cache["store"].size,
+    });
   });
 
   // ── Chat Endpoint ───────────────────────────────────────
   app.post("/api/chat", async (req: Request, res: Response) => {
     try {
-      const { messages } = req.body;
+      const { messages } = req.body as { messages?: ChatMessage[] };
 
       if (!Array.isArray(messages) || messages.length === 0) {
         res.status(400).json({ error: "Messages array is required and must not be empty." });
@@ -137,27 +254,28 @@ export async function createApp(): Promise<express.Express> {
       }
 
       // Build Gemini-compatible history (must start with 'user' role)
-      const history = messages.slice(0, -1).map((m: any) => ({
-        role: m.role === "user" ? "user" : "model",
+      const history = messages.slice(0, -1).map((m: ChatMessage) => ({
+        role: m.role === "user" ? ("user" as const) : ("model" as const),
         parts: [{ text: sanitizeInput(String(m.content || "")) }],
       }));
 
-      const firstUserIndex = history.findIndex((m: any) => m.role === "user");
+      const firstUserIndex = history.findIndex((m) => m.role === "user");
       const validHistory = firstUserIndex !== -1 ? history.slice(firstUserIndex) : [];
 
       const chat = ai.chats.create({
         model: MODEL_ID,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
-          tools: [{ googleSearch: {} } as any],
+          tools: [{ googleSearch: {} } as Record<string, unknown>],
         },
         history: validHistory,
       });
 
-      const lastMessage = sanitizeInput(String(messages[messages.length - 1].content || ""));
+      const lastMsg = messages[messages.length - 1];
+      const lastMessage = sanitizeInput(String(lastMsg?.content || ""));
       const response = await chat.sendMessage({ message: lastMessage });
 
-      const fallback = {
+      const fallback: ChatResponse = {
         reply: "I'm processing your request. Please try again in a moment.",
         detectedPersona: "UNKNOWN",
         currentMode: "GENERAL",
@@ -165,10 +283,11 @@ export async function createApp(): Promise<express.Express> {
         uiData: {},
       };
 
-      const parsed = safeJsonParse(response.text || "{}", fallback);
+      const parsed = safeJsonParse<ChatResponse>(response.text || "{}", fallback);
       res.json(parsed);
-    } catch (error: any) {
-      console.error("Chat Error:", error.message);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error("Chat Error:", errMsg);
       res.status(500).json({ error: "Failed to generate response." });
     }
   });
@@ -176,7 +295,11 @@ export async function createApp(): Promise<express.Express> {
   // ── Summarization Endpoint ──────────────────────────────
   app.post("/api/summarize", async (req: Request, res: Response) => {
     try {
-      const { title, description, details } = req.body;
+      const { title, description, details } = req.body as {
+        title?: string;
+        description?: string;
+        details?: string[];
+      };
 
       if (!title || !description) {
         res.status(400).json({ error: "Title and description are required." });
@@ -199,14 +322,23 @@ Summary:`;
       });
 
       res.json({ summary: (response.text || "").trim() });
-    } catch (error: any) {
-      console.error("Summarize Error:", error.message);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error("Summarize Error:", errMsg);
       res.status(500).json({ error: "Failed to summarize." });
     }
   });
 
-  // ── Timeline Endpoint ───────────────────────────────────
+  // ── Timeline Endpoint (Cached) ──────────────────────────
   app.get("/api/timeline", async (_req: Request, res: Response) => {
+    // Check cache first
+    const cached = cache.get<{ timeline: TimelineItem[] }>("timeline");
+    if (cached) {
+      res.set("X-Cache", "HIT");
+      res.json(cached);
+      return;
+    }
+
     try {
       const prompt = `
 Search for the current and upcoming major election milestones for the Indian Elections (e.g. Model Code of Conduct, Polling Phases, Counting Day).
@@ -217,18 +349,23 @@ Only output the JSON array, no markdown blocks.`;
       const response = await ai.models.generateContent({
         model: MODEL_ID,
         contents: prompt,
-        config: { tools: [{ googleSearch: {} } as any] },
+        config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
       });
 
-      const fallback = [
+      const fallback: TimelineItem[] = [
         { title: "Election Announcement", date: "TBD", description: "Model Code of Conduct comes into effect." },
         { title: "Notification of Elections", date: "TBD", description: "Formal notification issued to constituencies." },
       ];
 
-      const timeline = safeJsonParse(response.text || "[]", fallback);
-      res.json({ timeline });
-    } catch (error: any) {
-      console.error("Timeline Error:", error.message);
+      const timeline = safeJsonParse<TimelineItem[]>(response.text || "[]", fallback);
+      const result = { timeline };
+
+      cache.set("timeline", result, CACHE_TTL.TIMELINE);
+      res.set("X-Cache", "MISS");
+      res.json(result);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error("Timeline Error:", errMsg);
       res.json({
         timeline: [
           { title: "Election Announcement", date: "TBD", description: "Model Code of Conduct comes into effect." },
@@ -238,27 +375,38 @@ Only output the JSON array, no markdown blocks.`;
     }
   });
 
-  // ── Candidates Endpoint ─────────────────────────────────
+  // ── Candidates Endpoint (Cached) ────────────────────────
   app.get("/api/candidates", async (req: Request, res: Response) => {
     try {
       const constituency = sanitizeInput(String(req.query.constituency || "Bangalore South"));
+      const cacheKey = `candidates:${constituency.toLowerCase()}`;
+
+      const cached = cache.get<{ candidates: CandidateRecord[]; source: string }>(cacheKey);
+      if (cached) {
+        res.set("X-Cache", "HIT");
+        res.json(cached);
+        return;
+      }
 
       // 1. Attempt official Government API first
       const govData = await fetchGovData("candidate-affidavits-resource-id", { constituency });
 
-      if (govData?.records?.length > 0) {
-        const candidates = govData.records.map((r: any) => ({
+      if (govData?.records && govData.records.length > 0) {
+        const candidates: CandidateRecord[] = govData.records.map((r: GovApiRecord) => ({
           id: r.candidate_id || crypto.randomUUID(),
-          name: r.candidate_name,
-          party: r.party_name,
+          name: r.candidate_name || "Unknown",
+          party: r.party_name || "Independent",
           education: r.education_qualifications || "N/A",
           assets: r.total_assets || "Unknown",
           criminalCases: r.criminal_cases || 0,
           profession: r.profession || "N/A",
-          partyLogo: String(r.party_name).substring(0, 2).toUpperCase(),
+          partyLogo: String(r.party_name || "IN").substring(0, 2).toUpperCase(),
           partyColor: "bg-slate-500",
         }));
-        res.json({ candidates, source: "data.gov.in" });
+        const result = { candidates, source: "data.gov.in" };
+        cache.set(cacheKey, result, CACHE_TTL.CANDIDATES);
+        res.set("X-Cache", "MISS");
+        res.json(result);
         return;
       }
 
@@ -272,19 +420,30 @@ Only output the JSON array.`;
       const response = await ai.models.generateContent({
         model: MODEL_ID,
         contents: prompt,
-        config: { tools: [{ googleSearch: {} } as any] },
+        config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
       });
 
-      const candidates = safeJsonParse(response.text || "[]", []);
-      res.json({ candidates, source: "Google Search Grounding" });
-    } catch (error: any) {
-      console.error("Candidates Error:", error.message);
+      const candidates = safeJsonParse<CandidateRecord[]>(response.text || "[]", []);
+      const result = { candidates, source: "Google Search Grounding" };
+      cache.set(cacheKey, result, CACHE_TTL.CANDIDATES);
+      res.set("X-Cache", "MISS");
+      res.json(result);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error("Candidates Error:", errMsg);
       res.status(500).json({ error: "Failed to fetch candidates." });
     }
   });
 
-  // ── Live Election Results Endpoint ──────────────────────
+  // ── Live Election Results Endpoint (Cached) ─────────────
   app.get("/api/election-results", async (_req: Request, res: Response) => {
+    const cached = cache.get<ElectionResults>("election-results");
+    if (cached) {
+      res.set("X-Cache", "HIT");
+      res.json(cached);
+      return;
+    }
+
     try {
       const prompt = `
 Search for the LATEST Indian General Election results or live counting trends from official sources like ECI.
@@ -300,10 +459,10 @@ Only output the JSON object.`;
       const response = await ai.models.generateContent({
         model: MODEL_ID,
         contents: prompt,
-        config: { tools: [{ googleSearch: {} } as any] },
+        config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
       });
 
-      const fallback = {
+      const fallback: ElectionResults = {
         timestamp: new Date().toISOString(),
         source: "Fallback Data",
         status: "LIVE",
@@ -323,10 +482,13 @@ Only output the JSON object.`;
         },
       };
 
-      const data = safeJsonParse(response.text || "{}", fallback);
+      const data = safeJsonParse<ElectionResults>(response.text || "{}", fallback);
+      cache.set("election-results", data, CACHE_TTL.RESULTS);
+      res.set("X-Cache", "MISS");
       res.json(data);
-    } catch (error: any) {
-      console.error("Live Results Error:", error.message);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error("Live Results Error:", errMsg);
       res.json({
         timestamp: new Date().toISOString(),
         source: "Fallback Data",
@@ -337,8 +499,15 @@ Only output the JSON object.`;
     }
   });
 
-  // ── News Feed Endpoint ──────────────────────────────────
+  // ── News Feed Endpoint (Cached) ─────────────────────────
   app.get("/api/news", async (_req: Request, res: Response) => {
+    const cached = cache.get<{ news: string[] }>("news");
+    if (cached) {
+      res.set("X-Cache", "HIT");
+      res.json(cached);
+      return;
+    }
+
     try {
       const prompt = `
 Search for the latest breaking news headlines about the Election Commission of India (ECI) or Indian elections today.
@@ -348,7 +517,7 @@ Return as a JSON array of strings. Only output the JSON array.`;
       const response = await ai.models.generateContent({
         model: MODEL_ID,
         contents: prompt,
-        config: { tools: [{ googleSearch: {} } as any] },
+        config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
       });
 
       const fallback = [
@@ -357,10 +526,14 @@ Return as a JSON array of strings. Only output the JSON array.`;
         "Voter Turnout App updated with real-time trends.",
       ];
 
-      const news = safeJsonParse(response.text || "[]", fallback);
-      res.json({ news });
-    } catch (error: any) {
-      console.error("News Error:", error.message);
+      const news = safeJsonParse<string[]>(response.text || "[]", fallback);
+      const result = { news };
+      cache.set("news", result, CACHE_TTL.NEWS);
+      res.set("X-Cache", "MISS");
+      res.json(result);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error("News Error:", errMsg);
       res.json({
         news: [
           "ECI announces special summary revision of electoral rolls.",
@@ -380,7 +553,15 @@ Return as a JSON array of strings. Only output the JSON array.`;
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      maxAge: "1d",
+      setHeaders: (res, filePath) => {
+        // Cache-busted assets get long cache, HTML always revalidated
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    }));
     app.get("*", (_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
