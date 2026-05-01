@@ -1,9 +1,29 @@
+/**
+ * @file   BoothFinder.tsx
+ * @module BoothFinder
+ * @description Polling booth locator component. Accepts a locality or EPIC ID,
+ *              renders an embedded Google Maps iframe (if API key is available),
+ *              and provides a direct link to the official ECI electoral search.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, motion/react, lucide-react
+ * @exports      BoothFinder (default)
+ */
+
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { MapPin, Search, Navigation, Info, ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-export default function BoothFinder() {
+/**
+ * BoothFinder — Interactive polling booth locator with Google Maps embed
+ * and a link to the official ECI electoral search portal.
+ *
+ * @returns {React.JSX.Element} The booth locator panel.
+ */
+export default function BoothFinder(): React.JSX.Element {
   const [address, setAddress] = useState('');
   const [showMap, setShowMap] = useState(false);
   const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim();

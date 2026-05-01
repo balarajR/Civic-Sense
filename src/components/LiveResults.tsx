@@ -1,28 +1,57 @@
+/**
+ * @file   LiveResults.tsx
+ * @module LiveResults
+ * @description Real-time election results dashboard. Fetches live data from
+ *              the server API and renders seat counts, party-wise leaderboard
+ *              bars, voter turnout statistics, and auto-refresh polling.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, motion/react, lucide-react
+ * @exports      LiveResults (default)
+ */
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { BarChart3, Activity, RefreshCw, AlertCircle, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-// Interfaces for our API response
+/** Minimum polling interval for live data refresh (ms). */
+const POLL_INTERVAL_MS = 60_000;
+
+/** Shape of a single party's election result entry. */
 interface PartyResult {
+  /** Full party name. */
   name: string;
+  /** Party acronym (e.g. "BJP", "INC"). */
   acronym: string;
+  /** Number of seats won (officially declared). */
   won: number;
+  /** Number of seats currently leading. */
   leading: number;
+  /** Total seats (won + leading). */
   total: number;
+  /** Tailwind color class for the party bar. */
   color: string;
 }
 
+/** Shape of the election results API response. */
 interface ApiResponse {
+  /** ISO timestamp of the data snapshot. */
   timestamp: string;
+  /** Data source attribution. */
   source: string;
+  /** API status string. */
   status: string;
+  /** National-level aggregated results. */
   national: {
     totalConstituencies: number;
     declared: number;
     leading: number;
     parties: PartyResult[];
   };
+  /** Voter turnout statistics. */
   turnout: {
     nationalAverage: string;
     highestState: { name: string; value: string };
@@ -30,7 +59,13 @@ interface ApiResponse {
   };
 }
 
-export default function LiveResults() {
+/**
+ * LiveResults — Real-time election results dashboard with auto-polling,
+ * animated party leaderboard bars, and voter turnout metrics.
+ *
+ * @returns {React.JSX.Element} The live results panel.
+ */
+export default function LiveResults(): React.JSX.Element {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +88,7 @@ export default function LiveResults() {
   useEffect(() => {
     fetchData();
     // In a real app, this might poll every few minutes
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(fetchData, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 

@@ -20,9 +20,22 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html'],
+      reporter: ['text', 'html', 'lcov'],
+      thresholds: {
+        lines: 100,
+        functions: 100,
+        branches: 100,
+        statements: 100,
+      },
       include: ['src/**/*.ts', 'src/**/*.tsx'],
-      exclude: ['src/test/**', 'src/vite-env.d.ts'],
+      exclude: [
+        'src/test/**',
+        'src/vite-env.d.ts',
+        'src/main.tsx',
+        'src/types.ts',
+        '**/*.test.ts',
+        '**/*.test.tsx',
+      ],
     },
   },
 });

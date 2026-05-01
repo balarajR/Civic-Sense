@@ -1,10 +1,24 @@
+/**
+ * @file   App.tsx
+ * @module App
+ * @description Root application shell for CivicSense. Composes the header,
+ *              sidebar navigation, chat interface, tool panels (Journey,
+ *              Quiz, Timeline, ActionHub), news ticker, and mobile drawer.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, motion/react, lucide-react
+ * @exports      App (default)
+ */
+
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
-import { 
-  Vote, 
-  MapPin, 
-  Calendar, 
-  Search, 
-  Award, 
+import {
+  Vote,
+  MapPin,
+  Calendar,
+  Search,
+  Award,
   ArrowRight,
   ShieldCheck,
   Menu,
@@ -14,12 +28,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import ChatInterface from './components/ChatInterface';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Lazy-load heavy components to reduce initial bundle & unused JS
+/** Lazy-load heavy components to reduce initial bundle & unused JS. */
 const JourneySimulator = lazy(() => import('./components/JourneySimulator'));
 const CivicQuiz = lazy(() => import('./components/CivicQuiz'));
 import { Message, Persona, InteractionMode, QuizQuestion } from './types';
 import { cn } from './lib/utils';
 
+/** Welcome message shown on first load before any user interaction. */
 const INITIAL_MESSAGE: Message = {
   id: '1',
   role: 'assistant',
@@ -27,6 +42,7 @@ const INITIAL_MESSAGE: Message = {
   timestamp: new Date(),
 };
 
+/** Default civic-awareness quiz questions used when no API data is available. */
 const DUMMY_QUIZ: QuizQuestion[] = [
     {
         question: "What is the minimum age to vote in Indian elections?",
@@ -69,7 +85,13 @@ const MOBILE_NAV = [
   { label: "05 ACTION HUB", mode: InteractionMode.ACTION_HUB },
 ] as const;
 
-export default function App() {
+/**
+ * App — Root application component. Manages global state (messages, persona,
+ * interaction mode) and renders the responsive layout shell.
+ *
+ * @returns {React.JSX.Element} The full application UI.
+ */
+export default function App(): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
   const [isLoading, setIsLoading] = useState(false);
   const [detectedPersona, setDetectedPersona] = useState<Persona>(Persona.UNKNOWN);
@@ -79,7 +101,7 @@ export default function App() {
   // AbortController ref — cancels in-flight fetch on component unmount or new request
   const abortRef = useRef<AbortController | null>(null);
 
-  // Fallback headlines when API isn't available (static hosting / Lighthouse)
+  /** Fallback headlines when API isn't available (static hosting / Lighthouse). */
   const FALLBACK_NEWS = [
     "ECI launches nationwide voter awareness campaign for 2026",
     "Digital voter ID cards now accepted at polling booths across India",
@@ -110,6 +132,12 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [civicScore, setCivicScore] = useState<number | null>(null);
 
+  /**
+   * Sends a user message to the chat API and appends the assistant reply.
+   * Cancels any in-flight request before issuing a new one.
+   *
+   * @param {string} content - User's chat message text.
+   */
   const handleSendMessage = useCallback(async (content: string) => {
     // Cancel any in-flight request
     if (abortRef.current) abortRef.current.abort();
@@ -162,9 +190,10 @@ export default function App() {
       setMessages(prev => [...prev, assistantMessage]);
       if (data.detectedPersona) setDetectedPersona(data.detectedPersona as Persona);
       if (data.currentMode) setCurrentMode(data.currentMode as InteractionMode);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      console.error(error);
+    } catch (error: any) {
+      if (error.name === 'AbortError') return;
+      const entry = JSON.stringify({ level: 'error', msg: 'Chat API request failed', error: String(error), ts: new Date().toISOString() });
+      console.error(entry);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
@@ -176,18 +205,22 @@ export default function App() {
     }
   }, [messages]);
 
+  /** Advances the journey simulator to the next stage (max 5). */
   const handleNextJourneyStage = useCallback(() => {
     setJourneyStage(s => Math.min(s + 1, 5));
   }, []);
 
+  /** Persists the user's civic quiz score when the quiz finishes. */
   const handleQuizComplete = useCallback((score: number) => {
     setCivicScore(score);
   }, []);
 
+  /** Switches the active interaction mode (desktop sidebar). */
   const handleModeChange = useCallback((mode: InteractionMode) => {
     setCurrentMode(mode);
   }, []);
 
+  /** Switches mode and auto-closes the mobile drawer. */
   const handleMobileModeChange = useCallback((mode: InteractionMode) => {
     setCurrentMode(mode);
     setIsSidebarOpen(false);

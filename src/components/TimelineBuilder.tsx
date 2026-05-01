@@ -1,12 +1,29 @@
+/**
+ * @file   TimelineBuilder.tsx
+ * @module TimelineBuilder
+ * @description Visual election timeline component. Fetches timeline events from
+ *              the API (or uses fallback data) and renders them as a vertical
+ *              timeline with animated transitions and ECI verification notices.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, motion/react, lucide-react
+ * @exports      TimelineBuilder (default)
+ */
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Calendar, Info, Clock, AlertCircle } from 'lucide-react';
 import { TimelineEvent } from '../types';
 
+/** Props accepted by the TimelineBuilder component. */
 interface TimelineBuilderProps {
+  /** Optional initial events to display (skips API fetch if provided). */
   events?: TimelineEvent[];
 }
 
+/** Fallback timeline data used when the API is unreachable. */
 const FALLBACK_TIMELINE: TimelineEvent[] = [
   { title: 'Schedule Announcement', date: 'ECI notified', description: 'The official election schedule is announced and the Model Code of Conduct begins.', cta: 'Verify on ECI' },
   { title: 'Nomination Period', date: 'Constituency-wise', description: 'Candidates file nominations, papers are scrutinized, and withdrawals close before the final list.' },
@@ -14,7 +31,14 @@ const FALLBACK_TIMELINE: TimelineEvent[] = [
   { title: 'Counting & Results', date: 'ECI notified', description: 'Votes are counted and constituency-wise results are published on the official results portal.' },
 ];
 
-export default function TimelineBuilder({ events: initialEvents }: TimelineBuilderProps) {
+/**
+ * TimelineBuilder — Vertical timeline visualization of election milestones
+ * with animated entries, API data fetching, and ECI verification notices.
+ *
+ * @param {TimelineBuilderProps} props - Component props.
+ * @returns {React.JSX.Element} The timeline panel.
+ */
+export default function TimelineBuilder({ events: initialEvents }: TimelineBuilderProps): React.JSX.Element {
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents || []);
   const [loading, setLoading] = useState<boolean>(!initialEvents || initialEvents.length === 0);
 
@@ -33,8 +57,9 @@ export default function TimelineBuilder({ events: initialEvents }: TimelineBuild
           setEvents(data.timeline);
         }
       })
-      .catch((error) => {
-        console.error(error);
+      .catch((err) => {
+        const entry = JSON.stringify({ level: 'error', msg: 'Timeline fetch failed', error: String(err), ts: new Date().toISOString() });
+        console.error(entry);
         setEvents(FALLBACK_TIMELINE);
       })
       .finally(() => setLoading(false));

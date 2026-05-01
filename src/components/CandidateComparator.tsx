@@ -1,8 +1,23 @@
+/**
+ * @file   CandidateComparator.tsx
+ * @module CandidateComparator
+ * @description Side-by-side candidate comparison tool. Fetches candidate data
+ *              from the API for a given constituency and allows the user to
+ *              select two candidates for a detailed affidavit-based comparison.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, motion/react, lucide-react
+ * @exports      CandidateComparator (default)
+ */
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, Info, ChevronRight, Scale, GraduationCap, Briefcase, AlertTriangle } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+/** Shape of a single candidate fetched from the API or used as fallback. */
 interface Candidate {
   id: string;
   name: string;
@@ -40,6 +55,12 @@ const FALLBACK_CANDIDATES: Candidate[] = [
   },
 ];
 
+/**
+ * Normalizes raw candidate data by sanitizing numeric fields and filling defaults.
+ *
+ * @param {Candidate} candidate - Raw candidate object from the API.
+ * @returns {Candidate} Sanitized candidate with guaranteed valid field values.
+ */
 function normalizeCandidate(candidate: Candidate): Candidate {
   const parsedCases = Number(candidate.criminalCases);
   return {
@@ -50,7 +71,13 @@ function normalizeCandidate(candidate: Candidate): Candidate {
   };
 }
 
-export default function CandidateComparator() {
+/**
+ * CandidateComparator — Side-by-side candidate comparison tool with
+ * constituency-based data fetching and affidavit-based analysis.
+ *
+ * @returns {React.JSX.Element} The candidate comparison panel.
+ */
+export default function CandidateComparator(): React.JSX.Element {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

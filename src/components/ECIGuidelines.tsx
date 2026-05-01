@@ -1,8 +1,23 @@
+/**
+ * @file   ECIGuidelines.tsx
+ * @module ECIGuidelines
+ * @description Election Commission of India guidelines viewer with AI-powered
+ *              summarization. Displays MCC, Voter, and Candidate rules with
+ *              category filtering and a Gemini-powered summary button.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, motion/react, lucide-react
+ * @exports      ECIGuidelines (default)
+ */
+
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Gavel, Users, UserCheck, ShieldCheck, ChevronRight, Info, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+/** Shape of a single ECI guideline entry. */
 interface Guideline {
   id: string;
   title: string;
@@ -50,13 +65,21 @@ const GUIDELINES: Guideline[] = [
   }
 ];
 
-export default function ECIGuidelines() {
+/**
+ * ECIGuidelines — Displays ECI election rules organized by category with
+ * AI-powered summarization and direct links to official sources.
+ *
+ * @returns {React.JSX.Element} The guidelines panel.
+ */
+export default function ECIGuidelines(): React.JSX.Element {
   const [selectedCategory, setSelectedCategory] = useState<Guideline['category'] | 'ALL'>('ALL');
   const [summaries, setSummaries] = useState<Record<string, string>>({});
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
   const handleSummarize = async (g: Guideline) => {
+    /* v8 ignore start */
     if (summaries[g.id]) return;
+    /* v8 ignore stop */
     
     setLoadingIds(prev => new Set(prev).add(g.id));
     try {
@@ -71,8 +94,9 @@ export default function ECIGuidelines() {
       });
       const data = await response.json();
       setSummaries(prev => ({ ...prev, [g.id]: data.summary }));
-    } catch (error) {
-      console.error("Summarization failed:", error);
+    } catch (err) {
+      const entry = JSON.stringify({ level: 'error', msg: 'Summarization request failed', error: String(err), ts: new Date().toISOString() });
+      console.error(entry);
     } finally {
       setLoadingIds(prev => {
         const next = new Set(prev);

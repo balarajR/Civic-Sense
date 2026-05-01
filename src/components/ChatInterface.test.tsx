@@ -121,6 +121,52 @@ describe('ChatInterface Component', () => {
     expect(screen.getByText('FIRST_TIME_VOTER')).toBeInTheDocument();
   });
 
+  it('should display correct badges for all remaining personas', () => {
+    const { rerender } = render(
+      <ChatInterface
+        messages={defaultMessages}
+        onSendMessage={mockSend}
+        isLoading={false}
+        detectedPersona={Persona.STUDENT_RESEARCHER}
+      />
+    );
+    expect(screen.getByText('STUDENT_RESEARCHER')).toBeInTheDocument();
+
+    rerender(
+      <ChatInterface
+        messages={defaultMessages}
+        onSendMessage={mockSend}
+        isLoading={false}
+        detectedPersona={Persona.ENGAGED_CITIZEN}
+      />
+    );
+    expect(screen.getByText('ENGAGED_CITIZEN')).toBeInTheDocument();
+
+    rerender(
+      <ChatInterface
+        messages={defaultMessages}
+        onSendMessage={mockSend}
+        isLoading={false}
+        detectedPersona={Persona.ELECTION_OFFICIAL}
+      />
+    );
+    expect(screen.getByText('ELECTION_OFFICIAL')).toBeInTheDocument();
+    
+    // Also test fallback to GUEST_USER for invalid persona
+    rerender(
+      <ChatInterface
+        messages={defaultMessages}
+        onSendMessage={mockSend}
+        isLoading={false}
+        detectedPersona={'INVALID_PERSONA' as Persona}
+      />
+    );
+    // When invalid, it should use UNKNOWN mapping which is GUEST_USER
+    // However, when it's UNKNOWN or mapped to UNKNOWN, we check if it is not rendered since detectedPersona !== Persona.UNKNOWN check in ChatInterface might be bypasses if it's 'INVALID_PERSONA' !== Persona.UNKNOWN.
+    // Wait, the component checks: detectedPersona !== Persona.UNKNOWN. 'INVALID_PERSONA' !== 'UNKNOWN', so it renders the badge.
+    expect(screen.getByText('GUEST_USER')).toBeInTheDocument();
+  });
+
   it('should NOT display persona badge when persona is UNKNOWN', () => {
     render(
       <ChatInterface
@@ -188,6 +234,36 @@ describe('ChatInterface Component', () => {
         detectedPersona={Persona.UNKNOWN}
       />
     );
+    const button = screen.getByRole('button', { name: /send message/i });
+    expect(button).toBeDisabled();
+  });
+
+  it('should enable send button when input has text', () => {
+    render(
+      <ChatInterface
+        messages={defaultMessages}
+        onSendMessage={mockSend}
+        isLoading={false}
+        detectedPersona={Persona.UNKNOWN}
+      />
+    );
+    const input = screen.getByPlaceholderText('TYPE_YOUR_QUERY_HERE...');
+    fireEvent.change(input, { target: { value: 'Hello' } });
+    const button = screen.getByRole('button', { name: /send message/i });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('should disable send button when isLoading is true even if input has text', () => {
+    render(
+      <ChatInterface
+        messages={defaultMessages}
+        onSendMessage={mockSend}
+        isLoading={true}
+        detectedPersona={Persona.UNKNOWN}
+      />
+    );
+    const input = screen.getByPlaceholderText('TYPE_YOUR_QUERY_HERE...');
+    fireEvent.change(input, { target: { value: 'Hello' } });
     const button = screen.getByRole('button', { name: /send message/i });
     expect(button).toBeDisabled();
   });

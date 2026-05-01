@@ -1,13 +1,31 @@
+/**
+ * @file   JourneySimulator.tsx
+ * @module JourneySimulator
+ * @description Step-by-step voter journey simulator that guides users through
+ *              the complete voting pipeline — from registration to results.
+ *              Includes checklists, progress tracking, and action prompts.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, motion/react, lucide-react
+ * @exports      JourneySimulator (default)
+ */
+
 import React from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle2, ChevronRight, MapPin, Search, Calendar, UserPlus } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+/** Props accepted by the JourneySimulator component. */
 interface JourneySimulatorProps {
+  /** The current stage index (1-based). */
   currentStage: number;
+  /** Callback to advance to the next stage. */
   onNext: () => void;
 }
 
+/** All stages in the voter journey pipeline. */
 const stages = [
   {
     id: 1,
@@ -54,9 +72,16 @@ const stages = [
     icon: Calendar,
     color: "bg-orange-500"
   }
-];
+] as const;
 
-export default function JourneySimulator({ currentStage, onNext }: JourneySimulatorProps) {
+/**
+ * JourneySimulator — Step-by-step voter journey simulator with progress
+ * tracking, checklists, and action prompts for each voting stage.
+ *
+ * @param {JourneySimulatorProps} props - Component props.
+ * @returns {React.JSX.Element} The journey simulator panel.
+ */
+export default function JourneySimulator({ currentStage, onNext }: JourneySimulatorProps): React.JSX.Element {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

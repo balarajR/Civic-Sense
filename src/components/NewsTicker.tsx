@@ -1,12 +1,38 @@
+/**
+ * @file   NewsTicker.tsx
+ * @module NewsTicker
+ * @description Horizontally scrolling news ticker that displays live election
+ *              headlines. Uses infinite CSS animation via Framer Motion for a
+ *              seamless loop effect.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, motion/react, lucide-react
+ * @exports      NewsTicker (default)
+ */
+
 import React from 'react';
 import { motion } from 'motion/react';
 import { Radio } from 'lucide-react';
 
+/** Scroll animation duration in seconds. */
+const TICKER_DURATION_SECONDS = 30;
+
+/** Props accepted by the NewsTicker component. */
 interface NewsTickerProps {
+  /** Array of headline strings to display in the ticker. */
   news: string[];
 }
 
-export default function NewsTicker({ news }: NewsTickerProps) {
+/**
+ * NewsTicker — renders a horizontally scrolling marquee of election headlines.
+ * The content is duplicated to create a seamless infinite loop.
+ *
+ * @param {NewsTickerProps} props - Component props.
+ * @returns {React.JSX.Element | null} The ticker element, or null if no headlines.
+ */
+export default function NewsTicker({ news }: NewsTickerProps): React.JSX.Element | null {
   if (!news || news.length === 0) return null;
 
   return (
@@ -23,13 +49,13 @@ export default function NewsTicker({ news }: NewsTickerProps) {
           initial={{ x: "0%" }}
           animate={{ x: "-50%" }}
           transition={{ 
-            duration: 30, 
+            duration: TICKER_DURATION_SECONDS, 
             repeat: Infinity, 
             ease: "linear" 
           }}
           className="flex whitespace-nowrap"
         >
-          {/* We repeat the content to ensure seamless loop */}
+          {/* First copy of headlines */}
           <div className="flex items-center">
             {news.map((item, idx) => (
               <span key={`news-1-${idx}`} className="text-white text-[10px] font-bold uppercase italic flex items-center">
@@ -38,6 +64,7 @@ export default function NewsTicker({ news }: NewsTickerProps) {
               </span>
             ))}
           </div>
+          {/* Duplicate for seamless loop */}
           <div className="flex items-center">
             {news.map((item, idx) => (
               <span key={`news-2-${idx}`} className="text-white text-[10px] font-bold uppercase italic flex items-center">

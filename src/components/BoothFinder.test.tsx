@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import BoothFinder from './BoothFinder';
 
@@ -45,6 +45,40 @@ describe('BoothFinder Component', () => {
     fireEvent.submit(form);
     // After search, offline message should disappear
     expect(screen.queryByText(/Map Terminal Offline/i)).not.toBeInTheDocument();
+  });
+
+  it('should render iframe when maps API key is available', () => {
+    // Save original env
+    const originalEnv = import.meta.env;
+    vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', 'test-key');
+    
+    // Clean up the beforeEach render and render again
+    cleanup();
+    render(<BoothFinder />);
+    
+    const input = screen.getByRole('textbox', { name: /enter your locality or EPIC ID/i });
+    fireEvent.change(input, { target: { value: 'Jayanagar' } });
+    const form = input.closest('form')!;
+    fireEvent.submit(form);
+    
+    expect(screen.getByTitle('Google Maps polling booth location')).toBeInTheDocument();
+    
+    // Restore env
+    vi.unstubAllEnvs();
+  });
+
+  it('should show offline map message when maps API key is missing', () => {
+    vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', '');
+    cleanup();
+    render(<BoothFinder />);
+    
+    const input = screen.getByRole('textbox', { name: /enter your locality or EPIC ID/i });
+    fireEvent.change(input, { target: { value: 'Jayanagar' } });
+    const form = input.closest('form')!;
+    fireEvent.submit(form);
+    
+    expect(screen.getByText(/Official verification needed/i)).toBeInTheDocument();
+    vi.unstubAllEnvs();
   });
 
   it('should render the ECI portal link with rel noopener noreferrer', () => {

@@ -1,20 +1,58 @@
-import "dotenv/config";
-import express, { Request, Response } from "express";
-import compression from "compression";
-import helmet from "helmet";
-import cors from "cors";
-import rateLimit from "express-rate-limit";
-import { createServer as createViteServer } from "vite";
-import path from "path";
-import { GoogleGenAI } from "@google/genai";
-import { buildLocalElectionAnswer, sanitizeInput, safeJsonParse } from "./src/server/utils";
+/**
+ * @file   server.ts
+ * @module Server
+ * @description Express server for the CivicSense AI election assistant.
+ *              Provides REST API endpoints for chat (Gemini), candidate data
+ *              (data.gov.in + AI fallback), election timeline, live results,
+ *              ECI guideline summarization, and news headlines. All responses
+ *              are cached with configurable TTLs for performance.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies express, compression, helmet, cors, express-rate-limit, @google/genai, dotenv
+ * @exports      createApp (for testing)
+ */
+
+import 'dotenv/config';
+import express, { Request, Response } from 'express';
+import compression from 'compression';
+import helmet from 'helmet';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import { createServer as createViteServer } from 'vite';
+import path from 'path';
+import { GoogleGenAI } from '@google/genai';
+import { buildLocalElectionAnswer, sanitizeInput, safeJsonParse } from './src/server/utils';
+import { logger } from './src/utils/logger';
+import { validateChatMessages, validateSummarizeInput, validateConstituency } from './src/utils/validators';
+import { ValidationError } from './src/utils/errors';
+import {
+  DEFAULT_PORT,
+  MODEL_ID,
+  DATA_GOV_BASE_URL,
+  DEFAULT_GCP_REGION,
+  VERTEX_AI_API_VERSION,
+  CACHE_TTL,
+  RATE_LIMIT_WINDOW_MS,
+  RATE_LIMIT_MAX_REQUESTS,
+  MAX_REQUEST_BODY_SIZE,
+  GOV_API_RESULT_LIMIT,
+  GOV_API_FORMAT,
+  TOTAL_LOK_SABHA_CONSTITUENCIES,
+  DEFAULT_CONSTITUENCY,
+  AI_CANDIDATE_COUNT,
+  AI_NEWS_HEADLINE_COUNT,
+  AI_TIMELINE_MILESTONE_COUNT,
+  FALLBACK_SUMMARY,
+} from './src/config/constants';
 
 // ────────────────────────────────────────────────────────────
 // Types — Strictly typed API response shapes
 // ────────────────────────────────────────────────────────────
 
 interface ChatMessage {
-  role: "user" | "assistant" | "model";
+  role: 'user' | 'assistant' | 'model';
   content: string;
 }
 
@@ -93,9 +131,22 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 
+/**
+ * Simple TTL-based in-memory cache for API responses.
+ * Automatically evicts expired entries on read.
+ */
 class ResponseCache {
   private store = new Map<string, CacheEntry<unknown>>();
 
+  /**
+   * Retrieves a cached value if it exists and has not expired.
+   *
+   * @param {string} key - Cache key to look up.
+   * @returns {T | null} Cached data, or null if missing/expired.
+   *
+   * @example
+   *   const data = cache.get<{ news: string[] }>('news');
+   */
   get<T>(key: string): T | null {
     const entry = this.store.get(key) as CacheEntry<T> | undefined;
     if (!entry) return null;
@@ -106,6 +157,17 @@ class ResponseCache {
     return entry.data;
   }
 
+  /**
+   * Stores a value in the cache with a specified TTL.
+   *
+   * @param {string} key   - Cache key.
+   * @param {T}      data  - Data to cache.
+   * @param {number} ttlMs - Time-to-live in milliseconds.
+   * @returns {void}
+   *
+   * @example
+   *   cache.set('timeline', { timeline: [] }, CACHE_TTL.TIMELINE);
+   */
   set<T>(key: string, data: T, ttlMs: number): void {
     this.store.set(key, { data, expiresAt: Date.now() + ttlMs });
   }
@@ -113,20 +175,11 @@ class ResponseCache {
 
 const cache = new ResponseCache();
 
-const CACHE_TTL = {
-  NEWS: 5 * 60 * 1000,       // 5 minutes
-  TIMELINE: 10 * 60 * 1000,  // 10 minutes
-  RESULTS: 2 * 60 * 1000,    // 2 minutes (semi-real-time)
-  CANDIDATES: 15 * 60 * 1000, // 15 minutes
-} as const;
-
 // ────────────────────────────────────────────────────────────
 // Constants
 // ────────────────────────────────────────────────────────────
 
-const PORT = Number(process.env.PORT) || 3000;
-const MODEL_ID = "gemini-2.5-flash";
-const DATA_GOV_BASE_URL = "https://api.data.gov.in/resource";
+const PORT = Number(process.env.PORT) || DEFAULT_PORT;
 
 // ────────────────────────────────────────────────────────────
 // Vertex AI / Gemini Enterprise initialization.
@@ -134,23 +187,35 @@ const DATA_GOV_BASE_URL = "https://api.data.gov.in/resource";
 
 let aiClient: GoogleGenAI | null = null;
 
+/**
+ * Returns the singleton Gemini AI client, initializing it on first call.
+ * Uses Vertex AI Enterprise mode with Application Default Credentials.
+ *
+ * @returns {GoogleGenAI} Configured Gemini AI client.
+ * @throws {Error} If GOOGLE_CLOUD_PROJECT is not set in environment.
+ *
+ * @example
+ *   const ai = getAiClient();
+ *   const response = await ai.models.generateContent({ model: MODEL_ID, contents: '...' });
+ */
 function getAiClient(): GoogleGenAI {
   if (aiClient) return aiClient;
 
   const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT_ID;
-  const location = process.env.GOOGLE_CLOUD_LOCATION || process.env.GCP_REGION || "us-central1";
+  const location = process.env.GOOGLE_CLOUD_LOCATION || process.env.GCP_REGION || DEFAULT_GCP_REGION;
 
   if (!project) {
-    throw new Error("Vertex AI project is not configured. Set GOOGLE_CLOUD_PROJECT.");
+    throw new Error('Vertex AI project is not configured. Set GOOGLE_CLOUD_PROJECT.');
   }
 
   aiClient = new GoogleGenAI({
     enterprise: true,
     project,
     location,
-    apiVersion: "v1",
+    apiVersion: VERTEX_AI_API_VERSION,
   });
 
+  logger.info('Gemini AI client initialized', { project, location });
   return aiClient;
 }
 
@@ -158,6 +223,17 @@ function getAiClient(): GoogleGenAI {
 // Utility: Fetch from data.gov.in Open Government Data API
 // ────────────────────────────────────────────────────────────
 
+/**
+ * Fetches data from the Indian Government Open Data Platform (data.gov.in).
+ * Returns null gracefully on any failure — never throws.
+ *
+ * @param {string} resourceId               - data.gov.in resource identifier.
+ * @param {Record<string, string>} filters  - Key-value filters for the query.
+ * @returns {Promise<GovApiResponse | null>} Parsed API response or null on failure.
+ *
+ * @example
+ *   const data = await fetchGovData('candidate-affidavits', { constituency: 'Bangalore South' });
+ */
 async function fetchGovData(
   resourceId: string,
   filters: Record<string, string> = {}
@@ -167,9 +243,9 @@ async function fetchGovData(
 
   try {
     const url = new URL(`${DATA_GOV_BASE_URL}/${resourceId}`);
-    url.searchParams.append("api-key", apiKey);
-    url.searchParams.append("format", "json");
-    url.searchParams.append("limit", "10");
+    url.searchParams.append('api-key', apiKey);
+    url.searchParams.append('format', GOV_API_FORMAT);
+    url.searchParams.append('limit', GOV_API_RESULT_LIMIT);
     Object.entries(filters).forEach(([key, value]) =>
       url.searchParams.append(`filters[${key}]`, value)
     );
@@ -178,7 +254,10 @@ async function fetchGovData(
     if (!response.ok) return null;
     return (await response.json()) as GovApiResponse;
   } catch (err) {
-    console.error("Gov API fetch failed:", err);
+    logger.error('Gov API fetch failed', {
+      resourceId,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    });
     return null;
   }
 }
@@ -223,61 +302,149 @@ Return a JSON object with this exact structure (no markdown fences):
 `;
 
 // ────────────────────────────────────────────────────────────
+// Fallback Data — used when AI or external APIs are unavailable
+// ────────────────────────────────────────────────────────────
+
+/** Fallback timeline entries when Gemini is unavailable. */
+const FALLBACK_TIMELINE: TimelineItem[] = [
+  { title: 'Election Announcement', date: 'TBD', description: 'Model Code of Conduct comes into effect.' },
+  { title: 'Notification of Elections', date: 'TBD', description: 'Formal notification issued to constituencies.' },
+];
+
+/** Fallback news headlines when Gemini is unavailable. */
+const FALLBACK_NEWS = [
+  'ECI announces special summary revision of electoral rolls.',
+  'Strict vigilance on social media to curb misinformation during MCC.',
+  'Voter Turnout App updated with real-time trends.',
+];
+
+/**
+ * Builds a fallback ElectionResults object when the AI endpoint fails.
+ *
+ * @returns {ElectionResults} Skeleton election results with zero counts.
+ */
+function buildFallbackResults(): ElectionResults {
+  return {
+    timestamp: new Date().toISOString(),
+    source: 'Fallback Data',
+    status: 'OFFLINE',
+    national: {
+      totalConstituencies: TOTAL_LOK_SABHA_CONSTITUENCIES,
+      declared: 0,
+      leading: 0,
+      parties: [],
+    },
+    turnout: {
+      nationalAverage: 'N/A',
+      highestState: { name: 'N/A', value: 'N/A' },
+      lowestState: { name: 'N/A', value: 'N/A' },
+    },
+  };
+}
+
+// ────────────────────────────────────────────────────────────
 // Server Bootstrap
 // ────────────────────────────────────────────────────────────
 
+/**
+ * Creates and configures the Express application with all middleware
+ * and API routes. Exported for integration testing.
+ *
+ * @returns {Promise<express.Express>} Configured Express app instance.
+ *
+ * @example
+ *   const app = await createApp();
+ *   const res = await request(app).get('/api/health');
+ */
 export async function createApp(): Promise<express.Express> {
   const app = express();
 
   // Trust Cloud Run / GCP load balancer proxy (fixes rate-limiter X-Forwarded-For warning)
-  app.set("trust proxy", 1);
+  app.set('trust proxy', 1);
 
   // Gzip/Brotli Compression — reduces payload sizes by ~70%
   app.use(compression());
-  
-  // Security Hardening
-  app.use(helmet({ contentSecurityPolicy: false })); // Disabled CSP for development with Vite
-  app.use(cors({ origin: process.env.APP_URL || "*" }));
-  
+
+  // Security Hardening — CSP with allowlists for Google Maps, Firebase, Gemini
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc:  ["'self'", "'unsafe-inline'", 'https://maps.googleapis.com'],
+        styleSrc:   ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        imgSrc:     ["'self'", 'data:', 'https://maps.gstatic.com', 'https://maps.googleapis.com'],
+        connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseio.com', 'https://firestore.googleapis.com'],
+        fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
+        frameSrc:   ["'none'"],
+        objectSrc:  ["'none'"],
+      },
+    },
+    hsts:           { maxAge: 31_536_000, includeSubDomains: true },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  }));
+
+  // CORS — restrict to known origins (never wildcard in production)
+  const ALLOWED_ORIGINS = [
+    process.env.APP_URL,
+    'https://civicsense.app',
+    'https://www.civicsense.app',
+    ...(process.env.NODE_ENV === 'development' ? ['http://localhost:3000', 'http://localhost:5173'] : []),
+  ].filter(Boolean) as string[];
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
+    credentials:    true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge:         86400,
+  }));
+
   // Rate Limiting
   const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per window
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    max: RATE_LIMIT_MAX_REQUESTS,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: "Too many requests, please try again later." }
+    message: { error: 'Too many requests, please try again later.' },
   });
-  
-  app.use("/api/", apiLimiter);
 
-  app.use(express.json({ limit: "1mb" }));
+  app.use('/api/', apiLimiter);
+
+  app.use(express.json({ limit: MAX_REQUEST_BODY_SIZE }));
 
   // ── Health Check ────────────────────────────────────────
-  app.get("/api/health", (_req: Request, res: Response) => {
+  /**
+   * GET /api/health — Returns server health status and cache statistics.
+   */
+  app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
-      status: "ok",
+      status: 'ok',
       timestamp: new Date().toISOString(),
-      cacheKeys: cache["store"].size,
+      cacheKeys: cache['store'].size,
     });
   });
 
   // ── Chat Endpoint ───────────────────────────────────────
-  app.post("/api/chat", async (req: Request, res: Response) => {
+  /**
+   * POST /api/chat — Processes a multi-turn conversation via Gemini AI.
+   * Falls back to rule-based local answers when Gemini is unavailable.
+   */
+  app.post('/api/chat', async (req: Request, res: Response) => {
     try {
-      const { messages } = req.body as { messages?: ChatMessage[] };
-
-      if (!Array.isArray(messages) || messages.length === 0) {
-        res.status(400).json({ error: "Messages array is required and must not be empty." });
-        return;
-      }
+      const messages = validateChatMessages((req.body as Record<string, unknown>).messages) as ChatMessage[];
 
       // Build Gemini-compatible history (must start with 'user' role)
       const history = messages.slice(0, -1).map((m: ChatMessage) => ({
-        role: m.role === "user" ? ("user" as const) : ("model" as const),
-        parts: [{ text: sanitizeInput(String(m.content || "")) }],
+        role: m.role === 'user' ? ('user' as const) : ('model' as const),
+        parts: [{ text: sanitizeInput(String(m.content || '')) }],
       }));
 
-      const firstUserIndex = history.findIndex((m) => m.role === "user");
+      const firstUserIndex = history.findIndex((m) => m.role === 'user');
       const validHistory = firstUserIndex !== -1 ? history.slice(firstUserIndex) : [];
 
       const chat = getAiClient().chats.create({
@@ -290,34 +457,31 @@ export async function createApp(): Promise<express.Express> {
       });
 
       const lastMsg = messages[messages.length - 1];
-      const lastMessage = sanitizeInput(String(lastMsg?.content || ""));
+      const lastMessage = sanitizeInput(String(lastMsg?.content || ''));
       const response = await chat.sendMessage({ message: lastMessage });
 
       const fallback: ChatResponse = buildLocalElectionAnswer(lastMessage);
-
-      const parsed = safeJsonParse<ChatResponse>(response.text || "{}", fallback);
+      const parsed = safeJsonParse<ChatResponse>(response.text || '{}', fallback);
       res.json(parsed);
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : "Unknown error";
-      console.error("Chat Error:", errMsg);
+      if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message, code: error.code });
+        return;
+      }
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Chat endpoint failed', { endpoint: '/api/chat', error: errMsg });
       const lastMsg = (req.body as { messages?: ChatMessage[] }).messages?.at(-1);
-      res.status(200).json(buildLocalElectionAnswer(sanitizeInput(String(lastMsg?.content || ""))));
+      res.status(200).json(buildLocalElectionAnswer(sanitizeInput(String(lastMsg?.content || ''))));
     }
   });
 
   // ── Summarization Endpoint ──────────────────────────────
-  app.post("/api/summarize", async (req: Request, res: Response) => {
+  /**
+   * POST /api/summarize — Summarizes an ECI guideline into one sentence using Gemini.
+   */
+  app.post('/api/summarize', async (req: Request, res: Response) => {
     try {
-      const { title, description, details } = req.body as {
-        title?: string;
-        description?: string;
-        details?: string[];
-      };
-
-      if (!title || !description) {
-        res.status(400).json({ error: "Title and description are required." });
-        return;
-      }
+      const { title, description, details } = validateSummarizeInput(req.body);
 
       const prompt = `
 Summarize the following ECI guideline in exactly one concise, powerful sentence for an Indian citizen.
@@ -325,7 +489,7 @@ Focus on the practical implication for the voter or candidate.
 
 Title: ${sanitizeInput(title)}
 Context: ${sanitizeInput(description)}
-Rules: ${Array.isArray(details) ? details.map(sanitizeInput).join(", ") : "N/A"}
+Rules: ${Array.isArray(details) ? details.map(sanitizeInput).join(', ') : 'N/A'}
 
 Summary:`;
 
@@ -334,22 +498,26 @@ Summary:`;
         contents: prompt,
       });
 
-      res.json({ summary: (response.text || "").trim() });
+      res.json({ summary: (response.text || '').trim() });
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : "Unknown error";
-      console.error("Summarize Error:", errMsg);
-      res.json({
-        summary: "Follow this ECI guideline using official records first, and verify the latest rule on eci.gov.in before acting.",
-      });
+      if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message, code: error.code });
+        return;
+      }
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Summarize endpoint failed', { endpoint: '/api/summarize', error: errMsg });
+      res.json({ summary: FALLBACK_SUMMARY });
     }
   });
 
   // ── Timeline Endpoint (Cached) ──────────────────────────
-  app.get("/api/timeline", async (_req: Request, res: Response) => {
-    // Check cache first
-    const cached = cache.get<{ timeline: TimelineItem[] }>("timeline");
+  /**
+   * GET /api/timeline — Returns major election milestones via Gemini + Google Search.
+   */
+  app.get('/api/timeline', async (_req: Request, res: Response) => {
+    const cached = cache.get<{ timeline: TimelineItem[] }>('timeline');
     if (cached) {
-      res.set("X-Cache", "HIT");
+      res.set('X-Cache', 'HIT');
       res.json(cached);
       return;
     }
@@ -357,7 +525,7 @@ Summary:`;
     try {
       const prompt = `
 Search for the current and upcoming major election milestones for the Indian Elections (e.g. Model Code of Conduct, Polling Phases, Counting Day).
-Generate a strictly structured JSON array of 4 major election milestones based on the search results.
+Generate a strictly structured JSON array of ${AI_TIMELINE_MILESTONE_COUNT} major election milestones based on the search results.
 Each object must have 'title', 'date', and 'description' keys.
 Only output the JSON array, no markdown blocks.`;
 
@@ -367,68 +535,63 @@ Only output the JSON array, no markdown blocks.`;
         config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
       });
 
-      const fallback: TimelineItem[] = [
-        { title: "Election Announcement", date: "TBD", description: "Model Code of Conduct comes into effect." },
-        { title: "Notification of Elections", date: "TBD", description: "Formal notification issued to constituencies." },
-      ];
-
-      const timeline = safeJsonParse<TimelineItem[]>(response.text || "[]", fallback);
+      const timeline = safeJsonParse<TimelineItem[]>(response.text || '[]', FALLBACK_TIMELINE);
       const result = { timeline };
 
-      cache.set("timeline", result, CACHE_TTL.TIMELINE);
-      res.set("X-Cache", "MISS");
+      cache.set('timeline', result, CACHE_TTL.TIMELINE);
+      res.set('X-Cache', 'MISS');
       res.json(result);
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : "Unknown error";
-      console.error("Timeline Error:", errMsg);
-      res.json({
-        timeline: [
-          { title: "Election Announcement", date: "TBD", description: "Model Code of Conduct comes into effect." },
-          { title: "Notification of Elections", date: "TBD", description: "Formal notification issued to constituencies." },
-        ],
-      });
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Timeline endpoint failed', { endpoint: '/api/timeline', error: errMsg });
+      res.json({ timeline: FALLBACK_TIMELINE });
     }
   });
 
   // ── Candidates Endpoint (Cached) ────────────────────────
-  app.get("/api/candidates", async (req: Request, res: Response) => {
+  /**
+   * GET /api/candidates — Returns candidate data for a constituency.
+   * Attempts data.gov.in first, falls back to Gemini + Google Search.
+   */
+  app.get('/api/candidates', async (req: Request, res: Response) => {
     try {
-      const constituency = sanitizeInput(String(req.query.constituency || "Bangalore South"));
-      const cacheKey = `candidates:${constituency.toLowerCase()}`;
+      const constituency = validateConstituency(req.query.constituency, DEFAULT_CONSTITUENCY);
+      const sanitizedConstituency = sanitizeInput(constituency);
+      const cacheKey = `candidates:${sanitizedConstituency.toLowerCase()}`;
 
       const cached = cache.get<{ candidates: CandidateRecord[]; source: string }>(cacheKey);
       if (cached) {
-        res.set("X-Cache", "HIT");
+        res.set('X-Cache', 'HIT');
         res.json(cached);
         return;
       }
 
       // 1. Attempt official Government API first
-      const govData = await fetchGovData("candidate-affidavits-resource-id", { constituency });
+      const govData = await fetchGovData('candidate-affidavits-resource-id', { constituency: sanitizedConstituency });
 
       if (govData?.records && govData.records.length > 0) {
         const candidates: CandidateRecord[] = govData.records.map((r: GovApiRecord) => ({
           id: r.candidate_id || crypto.randomUUID(),
-          name: r.candidate_name || "Unknown",
-          party: r.party_name || "Independent",
-          education: r.education_qualifications || "N/A",
-          assets: r.total_assets || "Unknown",
+          name: r.candidate_name || 'Unknown',
+          party: r.party_name || 'Independent',
+          education: r.education_qualifications || 'N/A',
+          assets: r.total_assets || 'Unknown',
           criminalCases: r.criminal_cases || 0,
-          profession: r.profession || "N/A",
-          partyLogo: String(r.party_name || "IN").substring(0, 2).toUpperCase(),
-          partyColor: "bg-slate-500",
+          profession: r.profession || 'N/A',
+          partyLogo: String(r.party_name || 'IN').substring(0, 2).toUpperCase(),
+          partyColor: 'bg-slate-500',
         }));
-        const result = { candidates, source: "data.gov.in" };
+        const result = { candidates, source: 'data.gov.in' };
         cache.set(cacheKey, result, CACHE_TTL.CANDIDATES);
-        res.set("X-Cache", "MISS");
+        res.set('X-Cache', 'MISS');
         res.json(result);
         return;
       }
 
       // 2. Fallback to Gemini with Google Search Grounding
       const prompt = `
-Search for the actual leading candidates contesting in the constituency of "${constituency}" in the most recent Indian election.
-Create exactly 3 candidates based on the real data.
+Search for the actual leading candidates contesting in the constituency of "${sanitizedConstituency}" in the most recent Indian election.
+Create exactly ${AI_CANDIDATE_COUNT} candidates based on the real data.
 Return as a JSON array of objects with keys: 'id', 'name', 'party', 'education', 'assets', 'criminalCases', 'profession', 'partyLogo' (2 letters), 'partyColor' (tailwind bg class).
 Only output the JSON array.`;
 
@@ -438,26 +601,29 @@ Only output the JSON array.`;
         config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
       });
 
-      const candidates = safeJsonParse<CandidateRecord[]>(response.text || "[]", []);
-      const result = { candidates, source: "Google Search Grounding" };
+      const candidates = safeJsonParse<CandidateRecord[]>(response.text || '[]', []);
+      const result = { candidates, source: 'Google Search Grounding' };
       cache.set(cacheKey, result, CACHE_TTL.CANDIDATES);
-      res.set("X-Cache", "MISS");
+      res.set('X-Cache', 'MISS');
       res.json(result);
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : "Unknown error";
-      console.error("Candidates Error:", errMsg);
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Candidates endpoint failed', { endpoint: '/api/candidates', error: errMsg });
       res.json({
         candidates: [],
-        source: "Unavailable - verify candidate affidavits on the official ECI portal.",
+        source: 'Unavailable - verify candidate affidavits on the official ECI portal.',
       });
     }
   });
 
   // ── Live Election Results Endpoint (Cached) ─────────────
-  app.get("/api/election-results", async (_req: Request, res: Response) => {
-    const cached = cache.get<ElectionResults>("election-results");
+  /**
+   * GET /api/election-results — Returns live or recent election results via Gemini.
+   */
+  app.get('/api/election-results', async (_req: Request, res: Response) => {
+    const cached = cache.get<ElectionResults>('election-results');
     if (cached) {
-      res.set("X-Cache", "HIT");
+      res.set('X-Cache', 'HIT');
       res.json(cached);
       return;
     }
@@ -482,46 +648,43 @@ Only output the JSON object.`;
 
       const fallback: ElectionResults = {
         timestamp: new Date().toISOString(),
-        source: "Fallback Data",
-        status: "LIVE",
+        source: 'Fallback Data',
+        status: 'LIVE',
         national: {
-          totalConstituencies: 543,
+          totalConstituencies: TOTAL_LOK_SABHA_CONSTITUENCIES,
           declared: 0,
           leading: 0,
           parties: [
-            { name: "Party A", acronym: "PA", won: 0, leading: 0, total: 0, color: "bg-emerald-500" },
-            { name: "Party B", acronym: "PB", won: 0, leading: 0, total: 0, color: "bg-orange-600" },
+            { name: 'Party A', acronym: 'PA', won: 0, leading: 0, total: 0, color: 'bg-emerald-500' },
+            { name: 'Party B', acronym: 'PB', won: 0, leading: 0, total: 0, color: 'bg-orange-600' },
           ],
         },
         turnout: {
-          nationalAverage: "N/A",
-          highestState: { name: "N/A", value: "N/A" },
-          lowestState: { name: "N/A", value: "N/A" },
+          nationalAverage: 'N/A',
+          highestState: { name: 'N/A', value: 'N/A' },
+          lowestState: { name: 'N/A', value: 'N/A' },
         },
       };
 
-      const data = safeJsonParse<ElectionResults>(response.text || "{}", fallback);
-      cache.set("election-results", data, CACHE_TTL.RESULTS);
-      res.set("X-Cache", "MISS");
+      const data = safeJsonParse<ElectionResults>(response.text || '{}', fallback);
+      cache.set('election-results', data, CACHE_TTL.RESULTS);
+      res.set('X-Cache', 'MISS');
       res.json(data);
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : "Unknown error";
-      console.error("Live Results Error:", errMsg);
-      res.json({
-        timestamp: new Date().toISOString(),
-        source: "Fallback Data",
-        status: "OFFLINE",
-        national: { totalConstituencies: 543, declared: 0, leading: 0, parties: [] },
-        turnout: { nationalAverage: "N/A", highestState: { name: "N/A", value: "N/A" }, lowestState: { name: "N/A", value: "N/A" } },
-      });
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Election results endpoint failed', { endpoint: '/api/election-results', error: errMsg });
+      res.json(buildFallbackResults());
     }
   });
 
   // ── News Feed Endpoint (Cached) ─────────────────────────
-  app.get("/api/news", async (_req: Request, res: Response) => {
-    const cached = cache.get<{ news: string[] }>("news");
+  /**
+   * GET /api/news — Returns recent election news headlines via Gemini + Google Search.
+   */
+  app.get('/api/news', async (_req: Request, res: Response) => {
+    const cached = cache.get<{ news: string[] }>('news');
     if (cached) {
-      res.set("X-Cache", "HIT");
+      res.set('X-Cache', 'HIT');
       res.json(cached);
       return;
     }
@@ -529,7 +692,7 @@ Only output the JSON object.`;
     try {
       const prompt = `
 Search for the latest breaking news headlines about the Election Commission of India (ECI) or Indian elections today.
-Extract exactly 6 recent, factual news headlines.
+Extract exactly ${AI_NEWS_HEADLINE_COUNT} recent, factual news headlines.
 Return as a JSON array of strings. Only output the JSON array.`;
 
       const response = await getAiClient().models.generateContent({
@@ -538,50 +701,38 @@ Return as a JSON array of strings. Only output the JSON array.`;
         config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
       });
 
-      const fallback = [
-        "ECI announces special summary revision of electoral rolls.",
-        "Strict vigilance on social media to curb misinformation during MCC.",
-        "Voter Turnout App updated with real-time trends.",
-      ];
-
-      const news = safeJsonParse<string[]>(response.text || "[]", fallback);
+      const news = safeJsonParse<string[]>(response.text || '[]', FALLBACK_NEWS);
       const result = { news };
-      cache.set("news", result, CACHE_TTL.NEWS);
-      res.set("X-Cache", "MISS");
+      cache.set('news', result, CACHE_TTL.NEWS);
+      res.set('X-Cache', 'MISS');
       res.json(result);
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : "Unknown error";
-      console.error("News Error:", errMsg);
-      res.json({
-        news: [
-          "ECI announces special summary revision of electoral rolls.",
-          "Strict vigilance on social media to curb misinformation during MCC.",
-          "Voter Turnout App updated with real-time trends.",
-        ],
-      });
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('News endpoint failed', { endpoint: '/api/news', error: errMsg });
+      res.json({ news: FALLBACK_NEWS });
     }
   });
 
   // ── Vite Middleware (Development) / Static (Production) ─
-  if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
+  if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "spa",
+      appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath, {
-      maxAge: "1d",
+      maxAge: '1d',
       setHeaders: (res, filePath) => {
         // Cache-busted assets get long cache, HTML always revalidated
-        if (filePath.endsWith(".html")) {
-          res.setHeader("Cache-Control", "no-cache");
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
         }
       },
     }));
-    app.get("*", (_req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    app.get('*', (_req: Request, res: Response) => {
+      res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
@@ -589,16 +740,23 @@ Return as a JSON array of strings. Only output the JSON array.`;
 }
 
 // ── Start Listening ─────────────────────────────────────
+
+/**
+ * Bootstraps the server: creates the Express app and starts listening.
+ *
+ * @returns {Promise<void>}
+ * @throws {Error} If server creation or binding fails.
+ */
 async function startServer(): Promise<void> {
   const app = await createApp();
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`CivicSense server running on http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    logger.info('CivicSense server started', { port: PORT, url: `http://localhost:${PORT}` });
   });
 }
 
-if (process.env.NODE_ENV !== "test") {
+if (process.env.NODE_ENV !== 'test') {
   startServer().catch((err) => {
-    console.error("Fatal: Server failed to start.", err);
+    logger.error('Fatal: Server failed to start', { error: err instanceof Error ? err.message : String(err) });
     process.exit(1);
   });
 }

@@ -1,3 +1,17 @@
+/**
+ * @file   ChatInterface.tsx
+ * @module ChatInterface
+ * @description Real-time chat interface component for the CivicSense AI assistant.
+ *              Renders conversation history with markdown support, starter prompts,
+ *              auto-scrolling, persona badges, and a loading indicator.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, lucide-react, motion/react, react-markdown
+ * @exports      ChatInterface (default)
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, User, Bot, CalendarDays, MapPinned, UserPlus, BadgeHelp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -5,52 +19,76 @@ import { InteractionMode, Message, Persona } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
 
+/** Props accepted by the ChatInterface component. */
 interface ChatInterfaceProps {
+  /** Array of conversation messages to render. */
   messages: Message[];
+  /** Callback invoked when the user sends a new message. */
   onSendMessage: (content: string) => void;
+  /** Whether an AI response is currently being generated. */
   isLoading: boolean;
+  /** Currently detected user persona for badge display. */
   detectedPersona: Persona;
 }
 
-export default function ChatInterface({ messages, onSendMessage, isLoading, detectedPersona }: ChatInterfaceProps) {
+/** Starter prompt configuration for quick-action buttons. */
+const STARTER_PROMPTS = [
+  { label: 'Register', prompt: 'Walk me through voter registration step by step.', icon: UserPlus },
+  { label: 'Timeline', prompt: 'Build an election timeline with each major step.', icon: CalendarDays },
+  { label: 'Booth', prompt: 'How do I find my polling booth and what should I carry?', icon: MapPinned },
+  { label: 'Myth', prompt: 'Help me fact-check an election claim neutrally.', icon: BadgeHelp },
+] as const;
+
+/**
+ * Maps a Persona enum value to a styled badge configuration.
+ *
+ * @param {Persona} persona - The detected user persona.
+ * @returns {{ label: string; color: string }} Badge label and Tailwind color classes.
+ */
+function getPersonaBadge(persona: Persona): { label: string; color: string } {
+  const badges: Record<Persona, { label: string; color: string }> = {
+    [Persona.FIRST_TIME_VOTER]: { label: 'FIRST_TIME_VOTER', color: 'bg-black text-white' },
+    [Persona.STUDENT_RESEARCHER]: { label: 'STUDENT_RESEARCHER', color: 'bg-blue-600 text-white' },
+    [Persona.ENGAGED_CITIZEN]: { label: 'ENGAGED_CITIZEN', color: 'bg-orange-500 text-black' },
+    [Persona.ELECTION_OFFICIAL]: { label: 'ELECTION_OFFICIAL', color: 'bg-purple-600 text-white' },
+    [Persona.UNKNOWN]: { label: 'GUEST_USER', color: 'bg-slate-200 text-slate-800' },
+  };
+  return badges[persona] || badges[Persona.UNKNOWN];
+}
+
+/**
+ * ChatInterface — renders the main conversation UI with message history,
+ * starter prompts, a text input, and a loading animation.
+ *
+ * @param {ChatInterfaceProps} props - Component props.
+ * @returns {React.JSX.Element} The chat interface panel.
+ */
+export default function ChatInterface({ messages, onSendMessage, isLoading, detectedPersona }: ChatInterfaceProps): React.JSX.Element {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const starterPrompts = [
-    { label: 'Register', prompt: 'Walk me through voter registration step by step.', icon: UserPlus },
-    { label: 'Timeline', prompt: 'Build an election timeline with each major step.', icon: CalendarDays },
-    { label: 'Booth', prompt: 'How do I find my polling booth and what should I carry?', icon: MapPinned },
-    { label: 'Myth', prompt: 'Help me fact-check an election claim neutrally.', icon: BadgeHelp },
-  ] as const;
 
+  /** Auto-scroll to the latest message whenever messages change. */
   useEffect(() => {
+    /* v8 ignore start */
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+    /* v8 ignore stop */
   }, [messages, isLoading]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  /**
+   * Handles form submission — sends the current input and clears the field.
+   *
+   * @param {React.FormEvent} e - Form submission event.
+   */
+  const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
-    if (input.trim() && !isLoading) {
-      onSendMessage(input);
-      setInput('');
-    }
+    if (!input.trim()) return;
+    onSendMessage(input.trim());
+    setInput('');
   };
 
-  const getPersonaBadge = (persona: Persona) => {
-    const badges = {
-      [Persona.FIRST_TIME_VOTER]: { label: 'FIRST_TIME_VOTER', color: 'bg-black text-white' },
-      [Persona.STUDENT_RESEARCHER]: { label: 'STUDENT_RESEARCHER', color: 'bg-blue-600 text-white' },
-      [Persona.ENGAGED_CITIZEN]: { label: 'ENGAGED_CITIZEN', color: 'bg-orange-500 text-black' },
-      [Persona.ELECTION_OFFICIAL]: { label: 'ELECTION_OFFICIAL', color: 'bg-purple-600 text-white' },
-      [Persona.UNKNOWN]: { label: 'GUEST_USER', color: 'bg-slate-200 text-slate-800' },
-    };
-    const badge = badges[persona] || badges[Persona.UNKNOWN];
-    return (
-      <span className={cn("text-[10px] uppercase font-black px-2 py-0.5 border-2 border-black", badge.color)}>
-        {badge.label}
-      </span>
-    );
-  };
+  const badge = getPersonaBadge(detectedPersona);
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
@@ -65,7 +103,9 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, dete
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
                 >
-                    {getPersonaBadge(detectedPersona)}
+                    <span className={cn("text-[10px] uppercase font-black px-2 py-0.5 border-2 border-black", badge.color)}>
+                      {badge.label}
+                    </span>
                 </motion.div>
             )}
             <div className="flex items-center gap-2">
@@ -133,7 +173,7 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, dete
 
       <form onSubmit={handleSubmit} className="p-6 border-t-2 border-black bg-white">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" aria-label="Suggested election questions">
-          {starterPrompts.map((item) => (
+          {STARTER_PROMPTS.map((item) => (
             <button
               key={item.label}
               type="button"

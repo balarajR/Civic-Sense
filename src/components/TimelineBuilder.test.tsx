@@ -67,4 +67,16 @@ describe('TimelineBuilder Component', () => {
     render(<TimelineBuilder events={events} />);
     expect(screen.getByText('Learn More')).toBeInTheDocument();
   });
+
+  it('should use fallback timeline if fetch fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockRejectedValueOnce(new Error('Network Error'));
+    render(<TimelineBuilder />);
+    
+    // After fetch fails, it should show the fallback
+    const fallbackMsg = await screen.findByText(/Schedule Announcement/);
+    expect(fallbackMsg).toBeInTheDocument();
+    
+    consoleSpy.mockRestore();
+  });
 });

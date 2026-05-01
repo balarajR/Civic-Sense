@@ -1,3 +1,17 @@
+/**
+ * @file   ActionHub.tsx
+ * @module ActionHub
+ * @description Multi-tool dashboard component that provides tabbed access to
+ *              Live Results, Booth Locator, Candidate Comparator, and ECI
+ *              Guidelines tools.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, lucide-react
+ * @exports      ActionHub (default)
+ */
+
 import React, { useState } from 'react';
 import BoothFinder from './BoothFinder';
 import CandidateComparator from './CandidateComparator';
@@ -6,6 +20,7 @@ import LiveResults from './LiveResults';
 import { cn } from '../lib/utils';
 import { MapPin, Users, Gavel, Activity } from 'lucide-react';
 
+/** Available tool panels within the Action Hub. */
 enum ActionTool {
   BOOTH_LOCATOR = 'BOOTH_LOCATOR',
   CANDIDATE_COMPARE = 'CANDIDATE_COMPARE',
@@ -14,10 +29,12 @@ enum ActionTool {
 }
 
 /**
- * ActionHub — Multi-tool dashboard providing access to Live Results,
+ * ActionHub — Multi-tool dashboard providing tabbed access to Live Results,
  * Booth Locator, Candidate Comparator, and ECI Guidelines.
+ *
+ * @returns {React.JSX.Element} The tabbed dashboard panel.
  */
-export default function ActionHub() {
+export default function ActionHub(): React.JSX.Element {
   const [activeTool, setActiveTool] = useState<ActionTool>(ActionTool.LIVE_RESULTS);
 
   return (

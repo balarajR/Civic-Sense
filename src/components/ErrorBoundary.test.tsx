@@ -79,4 +79,28 @@ describe('ErrorBoundary Component', () => {
     );
     expect(screen.getByRole('alert')).toBeInTheDocument();
   });
+
+  it('should recover when Retry is clicked and child no longer throws', () => {
+    let shouldThrow = true;
+    function RecoverableComponent() {
+      if (shouldThrow) throw new Error('Crash');
+      return <div>Recovered!</div>;
+    }
+
+    render(
+      <ErrorBoundary>
+        <RecoverableComponent />
+      </ErrorBoundary>
+    );
+    
+    // Initial error state
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    
+    // Fix issue and click retry
+    shouldThrow = false;
+    fireEvent.click(screen.getByText('Retry'));
+    
+    // Should be recovered
+    expect(screen.getByText('Recovered!')).toBeInTheDocument();
+  });
 });

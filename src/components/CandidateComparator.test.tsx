@@ -155,6 +155,39 @@ describe('CandidateComparator Component', () => {
 
     // Should show "Selection Pending" since fewer than 2 selected
     expect(screen.getByText('Selection Pending')).toBeInTheDocument();
+
+    // Re-select it
+    await act(async () => {
+      if (candidateButton) fireEvent.click(candidateButton);
+    });
+    
+    // Should show comparison view again
+    expect(screen.getByText(/Data Source/i)).toBeInTheDocument();
+  });
+
+  it('should not allow selecting more than 2 candidates', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        json: () => Promise.resolve(mockCandidates),
+      })
+    ) as unknown as typeof fetch;
+
+    await act(async () => {
+      render(<CandidateComparator />);
+    });
+
+    // Find a candidate that is NOT selected
+    const unselectedButton = screen.getAllByRole('button').find(
+      (b) => b.getAttribute('aria-pressed') === 'false' && b.textContent?.includes('Candidate Gamma')
+    );
+
+    await act(async () => {
+      if (unselectedButton) fireEvent.click(unselectedButton);
+    });
+
+    // The length of selected items shouldn't exceed 2
+    const selectedBadges = screen.getAllByText('Selected [X]');
+    expect(selectedBadges.length).toBe(2);
   });
 
   it('should show comparison view when exactly 2 candidates selected', async () => {
@@ -229,5 +262,46 @@ describe('CandidateComparator Component', () => {
       fireEvent.change(input, { target: { value: 'Varanasi' } });
     });
     expect(input).toHaveValue('Varanasi');
+  });
+  it('should normalize incomplete candidate data', async () => {
+    const incompleteMock = {
+      candidates: [
+        {
+          id: 'c4',
+          name: 'Candidate Delta',
+          party: 'Party D',
+          education: '10th Pass',
+          assets: '₹1 Cr',
+          criminalCases: 'Not a number',
+          profession: 'Farmer',
+          partyLogo: '',
+          partyColor: '',
+        },
+        {
+          id: 'c5',
+          name: 'Candidate Epsilon',
+          party: 'Party E',
+          education: '12th Pass',
+          assets: '₹2 Cr',
+          criminalCases: undefined,
+          profession: 'Farmer',
+          partyLogo: null,
+          partyColor: null,
+        }
+      ],
+    };
+
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        json: () => Promise.resolve(incompleteMock),
+      })
+    ) as unknown as typeof fetch;
+
+    await act(async () => {
+      render(<CandidateComparator />);
+    });
+
+    // Both should display 0 criminal cases ("NIL") instead of NaN
+    expect(screen.getAllByText('NIL').length).toBe(2);
   });
 });

@@ -139,7 +139,7 @@ describe('ECIGuidelines Component', () => {
   it('should show "Summarized" label after summary is generated', async () => {
     global.fetch = vi.fn(() =>
       Promise.resolve({
-        json: () => Promise.resolve({ summary: 'Test summary' }),
+        json: () => Promise.resolve({ summary: 'A short summary.' }),
       })
     ) as unknown as typeof fetch;
 
@@ -150,5 +150,18 @@ describe('ECIGuidelines Component', () => {
     await waitFor(() => {
       expect(screen.getByText('Summarized')).toBeInTheDocument();
     });
+  });
+
+  it('should handle AI summarization failure gracefully', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    global.fetch = vi.fn(() => Promise.reject(new Error('API Down'))) as unknown as typeof fetch;
+    render(<ECIGuidelines />);
+    const summarizeBtns = screen.getAllByText('AI Summarize');
+    fireEvent.click(summarizeBtns[0]!);
+
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalled();
+    });
+    consoleSpy.mockRestore();
   });
 });

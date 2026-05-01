@@ -71,4 +71,54 @@ describe('CivicQuiz Component', () => {
     // Should render something (possibly empty or a null guard)
     expect(container).toBeDefined();
   });
+
+  it('should finish quiz, show result and allow restart', () => {
+    render(<CivicQuiz questions={mockQuestions} onComplete={mockComplete} />);
+    
+    // Answer first question
+    fireEvent.click(screen.getByText('18')); // correct
+    fireEvent.click(screen.getByText(/NEXT/));
+
+    // Answer second question
+    fireEvent.click(screen.getByText('Police Station')); // incorrect
+    fireEvent.click(screen.getByText(/FINISH/));
+
+    // Check result
+    expect(mockComplete).toHaveBeenCalledWith(50); // 1 out of 2 = 50%
+    expect(screen.getByText(/Civic Readiness: 50%/i)).toBeInTheDocument();
+
+    // Restart
+    fireEvent.click(screen.getByText(/RESTART_SIMULATION/i));
+    
+    // Back to first question
+    expect(screen.getByText('What is the minimum age to vote?')).toBeInTheDocument();
+  });
+
+  it('should not allow selecting an option after one is already selected', () => {
+    render(<CivicQuiz questions={mockQuestions} onComplete={mockComplete} />);
+    const correctOption = screen.getByRole('button', { name: /18/i });
+    const incorrectOption = screen.getByRole('button', { name: /16/i });
+    
+    fireEvent.click(correctOption);
+    // Try to click another option
+    fireEvent.click(incorrectOption);
+    
+    // The incorrect option should remain disabled or not change the score
+    expect(incorrectOption).toBeDisabled();
+    expect(correctOption).toBeDisabled();
+  });
+
+  it('should display Master Citizen message on 100% score', () => {
+    render(<CivicQuiz questions={mockQuestions} onComplete={mockComplete} />);
+    
+    // Answer first question correctly
+    fireEvent.click(screen.getByText('18'));
+    fireEvent.click(screen.getByText(/NEXT/));
+
+    // Answer second question correctly
+    fireEvent.click(screen.getByText('Voter Helpline App'));
+    fireEvent.click(screen.getByText(/FINISH/));
+
+    expect(screen.getByText('Master Citizen status achieved.')).toBeInTheDocument();
+  });
 });

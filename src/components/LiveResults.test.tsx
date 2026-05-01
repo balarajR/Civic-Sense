@@ -94,6 +94,35 @@ describe('LiveResults Component', () => {
     expect(screen.getByText(/Election Commission of India/i)).toBeInTheDocument();
   });
 
+  it('should apply spin animation to refresh button while loading', async () => {
+    let resolvePromise: (value: any) => void;
+    
+    global.fetch = vi.fn()
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockApiResponse),
+      }))
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolvePromise = resolve;
+      })) as unknown as typeof fetch;
+
+    render(<LiveResults />);
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Refresh election results data/i)).toBeInTheDocument();
+    });
+    const refreshBtn = screen.getByLabelText(/Refresh election results data/i);
+    fireEvent.click(refreshBtn);
+    
+    expect(refreshBtn.querySelector('svg')).toHaveClass('animate-spin');
+    
+    await act(async () => {
+      resolvePromise!({
+        ok: true,
+        json: () => Promise.resolve(mockApiResponse),
+      });
+    });
+  });
+
   it('should render party names and seat counts', async () => {
     global.fetch = vi.fn(() =>
       Promise.resolve({
@@ -227,5 +256,34 @@ describe('LiveResults Component', () => {
     });
 
     expect(screen.getByLabelText('Refresh election results data')).toBeInTheDocument();
+  });
+
+  it('should fallback to Unknown error if non-Error is thrown', async () => {
+    global.fetch = vi.fn(() => Promise.reject('Network failure')) as unknown as typeof fetch;
+
+    await act(async () => {
+      render(<LiveResults />);
+    });
+
+    expect(screen.getByText(/Failed to load real-time election data/i)).toBeInTheDocument();
+  });
+
+  it('should fallback to empty array if parties is not an array', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          ...mockApiResponse,
+          national: { ...mockApiResponse.national, parties: null },
+        }),
+      })
+    ) as unknown as typeof fetch;
+
+    await act(async () => {
+      render(<LiveResults />);
+    });
+
+    expect(screen.getByText('543')).toBeInTheDocument();
+    expect(screen.queryByText(/Party Alpha/)).not.toBeInTheDocument();
   });
 });

@@ -170,11 +170,23 @@ describe('server utils', () => {
       expect(result.nextAction).toContain('Journey');
     });
 
-    it('should keep generic answers neutral and action oriented', () => {
+    it('should route generic answers neutral and action oriented', () => {
       const result = buildLocalElectionAnswer('Help me understand elections');
       expect(result.currentMode).toBe('GENERAL');
       expect(result.reply).toContain('registration');
       expect(result.reply).toContain('https://voters.eci.gov.in');
+    });
+
+    it('should route booth questions to the action hub mode', () => {
+      const result = buildLocalElectionAnswer('where is my polling booth?');
+      expect(result.currentMode).toBe('ACTION_HUB');
+      expect(result.reply).toContain('polling booth');
+    });
+
+    it('should route myth questions to the myth buster mode', () => {
+      const result = buildLocalElectionAnswer('is this evm fraud rumor true?');
+      expect(result.currentMode).toBe('MYTH_BUSTER');
+      expect(result.reply).toContain('myth-check');
     });
   });
 });

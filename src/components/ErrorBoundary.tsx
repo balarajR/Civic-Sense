@@ -1,19 +1,44 @@
+/**
+ * @file   ErrorBoundary.tsx
+ * @module ErrorBoundary
+ * @description React Error Boundary — catches rendering errors in child
+ *              components and displays a graceful fallback UI instead of
+ *              crashing the entire application.
+ *
+ * @author  CivicSense Team
+ * @created 2025-04-28
+ *
+ * @dependencies react, lucide-react
+ * @exports      ErrorBoundary (default)
+ */
+
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
+/** Props accepted by the ErrorBoundary component. */
 interface ErrorBoundaryProps {
+  /** Child components to wrap. */
   children: ReactNode;
+  /** Optional custom error message displayed in the fallback UI. */
   fallbackMessage?: string;
 }
 
+/** Internal state tracking whether an error has been caught. */
 interface ErrorBoundaryState {
+  /** Whether a rendering error has occurred. */
   hasError: boolean;
+  /** The caught Error object (for logging context). */
   error: Error | null;
 }
 
 /**
- * React Error Boundary — catches rendering errors in child components
- * and displays a graceful fallback UI instead of crashing the entire app.
+ * ErrorBoundary — Class component that implements React's error boundary API.
+ * Catches JavaScript errors in child component trees and renders a recovery UI.
+ *
+ * @example
+ *   <ErrorBoundary fallbackMessage="Chat failed.">
+ *     <ChatInterface />
+ *   </ErrorBoundary>
  */
 export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
@@ -21,14 +46,37 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     this.state = { hasError: false, error: null };
   }
 
+  /**
+   * Derives error state from a caught rendering error.
+   *
+   * @param {Error} error - The caught rendering error.
+   * @returns {ErrorBoundaryState} Updated state with error details.
+   */
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
+  /**
+   * Logs error details for debugging. Uses structured format for observability.
+   *
+   * @param {Error}     error     - The caught error.
+   * @param {ErrorInfo} errorInfo - React component stack trace.
+   */
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error("[ErrorBoundary] Caught rendering error:", error, errorInfo);
+    const entry = JSON.stringify({
+      level: 'error',
+      msg: 'ErrorBoundary caught rendering error',
+      errorName: error.name,
+      errorMessage: error.message,
+      componentStack: errorInfo.componentStack,
+      ts: new Date().toISOString(),
+    });
+    console.error(entry);
   }
 
+  /**
+   * Resets the error state so the child tree can re-render.
+   */
   handleReset = (): void => {
     this.setState({ hasError: false, error: null });
   };
