@@ -15,6 +15,41 @@ interface Candidate {
   partyColor: string;
 }
 
+const FALLBACK_CANDIDATES: Candidate[] = [
+  {
+    id: 'sample-1',
+    name: 'Candidate details unavailable',
+    party: 'Verify on ECI',
+    education: 'Check Form 26 affidavit',
+    assets: 'Official record required',
+    criminalCases: 0,
+    profession: 'Official record required',
+    partyLogo: 'EC',
+    partyColor: 'bg-slate-600',
+  },
+  {
+    id: 'sample-2',
+    name: 'Add constituency to compare',
+    party: 'Official sources only',
+    education: 'Check Form 26 affidavit',
+    assets: 'Official record required',
+    criminalCases: 0,
+    profession: 'Official record required',
+    partyLogo: 'IN',
+    partyColor: 'bg-slate-500',
+  },
+];
+
+function normalizeCandidate(candidate: Candidate): Candidate {
+  const parsedCases = Number(candidate.criminalCases);
+  return {
+    ...candidate,
+    criminalCases: Number.isFinite(parsedCases) ? parsedCases : 0,
+    partyLogo: candidate.partyLogo?.slice(0, 2).toUpperCase() || 'IN',
+    partyColor: candidate.partyColor || 'bg-slate-500',
+  };
+}
+
 export default function CandidateComparator() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -26,13 +61,19 @@ export default function CandidateComparator() {
     fetch(`/api/candidates?constituency=${encodeURIComponent(constituency)}`)
       .then(res => res.json())
       .then(data => {
-        if(data.candidates) {
-          setCandidates(data.candidates);
-          // Auto select first 2
-          setSelectedIds(data.candidates.slice(0, 2).map((c: Candidate) => c.id));
+        if(Array.isArray(data.candidates) && data.candidates.length > 0) {
+          const normalized = data.candidates.map(normalizeCandidate);
+          setCandidates(normalized);
+          setSelectedIds(normalized.slice(0, 2).map((c: Candidate) => c.id));
+        } else {
+          setCandidates(FALLBACK_CANDIDATES);
+          setSelectedIds(FALLBACK_CANDIDATES.map((c) => c.id));
         }
       })
-      .catch(console.error)
+      .catch(() => {
+        setCandidates(FALLBACK_CANDIDATES);
+        setSelectedIds(FALLBACK_CANDIDATES.map((c) => c.id));
+      })
       .finally(() => setLoading(false));
   }, [constituency]);
 
@@ -57,6 +98,7 @@ export default function CandidateComparator() {
         <input 
           type="text" 
           placeholder="Enter Constituency (e.g. Varanasi, Wayanad)"
+          aria-label="Enter constituency name for candidate comparison"
           className="border-2 border-black p-3 font-bold text-xs uppercase shadow-[2px_2px_0px_rgba(0,0,0,1)] focus:outline-none"
           value={constituency}
           onChange={(e) => setConstituency(e.target.value)}
@@ -73,6 +115,8 @@ export default function CandidateComparator() {
           <button
             key={c.id}
             onClick={() => toggleCandidate(c.id)}
+            aria-pressed={selectedIds.includes(c.id)}
+            aria-label={`${selectedIds.includes(c.id) ? 'Deselect' : 'Select'} candidate ${c.name} from ${c.party}`}
             className={cn(
               "p-4 border-2 border-black text-left transition-all bold-shadow-hover relative group overflow-hidden",
               selectedIds.includes(c.id) ? "bg-black text-white" : "bg-white"
@@ -99,7 +143,7 @@ export default function CandidateComparator() {
       </div>
 
       {/* Comparison View */}
-      <div className="min-h-[300px]">
+      <div className="min-h-[300px]" role="region" aria-label="Candidate comparison results">
         {selectedIds.length === 2 ? (
           <motion.div 
             initial={{ opacity: 0 }}

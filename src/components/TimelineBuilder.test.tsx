@@ -3,10 +3,10 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import TimelineBuilder from './TimelineBuilder';
 
-// Mock motion/react
+// Mock motion/react — filter out framer-motion props to avoid React DOM warnings
 vi.mock('motion/react', () => ({
   motion: {
-    div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) =>
+    div: ({ children, layout, initial, animate, exit, transition, whileHover, whileTap, whileInView, variants, ...props }: React.PropsWithChildren<Record<string, unknown>>) =>
       React.createElement('div', props, children),
   },
 }));

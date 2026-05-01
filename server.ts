@@ -7,7 +7,7 @@ import rateLimit from "express-rate-limit";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { GoogleGenAI } from "@google/genai";
-import { sanitizeInput, safeJsonParse } from "./src/server/utils";
+import { buildLocalElectionAnswer, sanitizeInput, safeJsonParse } from "./src/server/utils";
 
 // ────────────────────────────────────────────────────────────
 // Types — Strictly typed API response shapes
@@ -129,12 +129,30 @@ const MODEL_ID = "gemini-2.5-flash";
 const DATA_GOV_BASE_URL = "https://api.data.gov.in/resource";
 
 // ────────────────────────────────────────────────────────────
-// Gemini AI Initialization (API Key — works on Cloud Run)
+// Vertex AI / Gemini Enterprise initialization.
 // ────────────────────────────────────────────────────────────
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+let aiClient: GoogleGenAI | null = null;
+
+function getAiClient(): GoogleGenAI {
+  if (aiClient) return aiClient;
+
+  const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT_ID;
+  const location = process.env.GOOGLE_CLOUD_LOCATION || process.env.GCP_REGION || "us-central1";
+
+  if (!project) {
+    throw new Error("Vertex AI project is not configured. Set GOOGLE_CLOUD_PROJECT.");
+  }
+
+  aiClient = new GoogleGenAI({
+    enterprise: true,
+    project,
+    location,
+    apiVersion: "v1",
+  });
+
+  return aiClient;
+}
 
 // ────────────────────────────────────────────────────────────
 // Utility: Fetch from data.gov.in Open Government Data API
@@ -170,7 +188,7 @@ async function fetchGovData(
 // ────────────────────────────────────────────────────────────
 
 const SYSTEM_INSTRUCTION = `
-You are CivicSence — an intelligent, politically neutral election education assistant built for India, with state-level awareness for Karnataka.
+You are CivicSense — an intelligent, politically neutral election education assistant built for India, with state-level awareness for Karnataka.
 Your mission is to transform civic confusion into confident, informed action.
 
 CRITICAL: Always query Google Search for the latest news regarding Indian elections and the Election Commission of India before answering, ensuring your responses are grounded in real-time, factual events.
@@ -262,7 +280,7 @@ export async function createApp(): Promise<express.Express> {
       const firstUserIndex = history.findIndex((m) => m.role === "user");
       const validHistory = firstUserIndex !== -1 ? history.slice(firstUserIndex) : [];
 
-      const chat = ai.chats.create({
+      const chat = getAiClient().chats.create({
         model: MODEL_ID,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
@@ -275,20 +293,15 @@ export async function createApp(): Promise<express.Express> {
       const lastMessage = sanitizeInput(String(lastMsg?.content || ""));
       const response = await chat.sendMessage({ message: lastMessage });
 
-      const fallback: ChatResponse = {
-        reply: "I'm processing your request. Please try again in a moment.",
-        detectedPersona: "UNKNOWN",
-        currentMode: "GENERAL",
-        nextAction: "Ask me about voter registration or election dates.",
-        uiData: {},
-      };
+      const fallback: ChatResponse = buildLocalElectionAnswer(lastMessage);
 
       const parsed = safeJsonParse<ChatResponse>(response.text || "{}", fallback);
       res.json(parsed);
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : "Unknown error";
       console.error("Chat Error:", errMsg);
-      res.status(500).json({ error: "Failed to generate response." });
+      const lastMsg = (req.body as { messages?: ChatMessage[] }).messages?.at(-1);
+      res.status(200).json(buildLocalElectionAnswer(sanitizeInput(String(lastMsg?.content || ""))));
     }
   });
 
@@ -316,7 +329,7 @@ Rules: ${Array.isArray(details) ? details.map(sanitizeInput).join(", ") : "N/A"}
 
 Summary:`;
 
-      const response = await ai.models.generateContent({
+      const response = await getAiClient().models.generateContent({
         model: MODEL_ID,
         contents: prompt,
       });
@@ -325,7 +338,9 @@ Summary:`;
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : "Unknown error";
       console.error("Summarize Error:", errMsg);
-      res.status(500).json({ error: "Failed to summarize." });
+      res.json({
+        summary: "Follow this ECI guideline using official records first, and verify the latest rule on eci.gov.in before acting.",
+      });
     }
   });
 
@@ -346,7 +361,7 @@ Generate a strictly structured JSON array of 4 major election milestones based o
 Each object must have 'title', 'date', and 'description' keys.
 Only output the JSON array, no markdown blocks.`;
 
-      const response = await ai.models.generateContent({
+      const response = await getAiClient().models.generateContent({
         model: MODEL_ID,
         contents: prompt,
         config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
@@ -417,7 +432,7 @@ Create exactly 3 candidates based on the real data.
 Return as a JSON array of objects with keys: 'id', 'name', 'party', 'education', 'assets', 'criminalCases', 'profession', 'partyLogo' (2 letters), 'partyColor' (tailwind bg class).
 Only output the JSON array.`;
 
-      const response = await ai.models.generateContent({
+      const response = await getAiClient().models.generateContent({
         model: MODEL_ID,
         contents: prompt,
         config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
@@ -431,7 +446,10 @@ Only output the JSON array.`;
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : "Unknown error";
       console.error("Candidates Error:", errMsg);
-      res.status(500).json({ error: "Failed to fetch candidates." });
+      res.json({
+        candidates: [],
+        source: "Unavailable - verify candidate affidavits on the official ECI portal.",
+      });
     }
   });
 
@@ -456,7 +474,7 @@ Return a JSON object with:
 - 'turnout' (object with 'nationalAverage', 'highestState' {name, value}, 'lowestState' {name, value})
 Only output the JSON object.`;
 
-      const response = await ai.models.generateContent({
+      const response = await getAiClient().models.generateContent({
         model: MODEL_ID,
         contents: prompt,
         config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
@@ -514,7 +532,7 @@ Search for the latest breaking news headlines about the Election Commission of I
 Extract exactly 6 recent, factual news headlines.
 Return as a JSON array of strings. Only output the JSON array.`;
 
-      const response = await ai.models.generateContent({
+      const response = await getAiClient().models.generateContent({
         model: MODEL_ID,
         contents: prompt,
         config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
@@ -574,7 +592,7 @@ Return as a JSON array of strings. Only output the JSON array.`;
 async function startServer(): Promise<void> {
   const app = await createApp();
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`✅ CivicSence server running on http://localhost:${PORT}`);
+    console.log(`CivicSense server running on http://localhost:${PORT}`);
   });
 }
 

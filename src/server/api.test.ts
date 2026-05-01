@@ -50,6 +50,8 @@ describe('CivicSense API Endpoints', () => {
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
+    process.env.GOOGLE_CLOUD_PROJECT = 'test-project';
+    process.env.GOOGLE_CLOUD_LOCATION = 'us-central1';
     app = await createApp();
   });
 

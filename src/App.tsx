@@ -23,7 +23,7 @@ import { cn } from './lib/utils';
 const INITIAL_MESSAGE: Message = {
   id: '1',
   role: 'assistant',
-  content: "Namaste! I am **CivicSence**, your intelligent guide to Indian elections. 🗳️\n\nI can help you register to vote, find your booth in Karnataka, or bust myths you've heard. \n\n**What shall we start with?**",
+  content: "Namaste! I am **CivicSense**, your intelligent guide to Indian elections. 🗳️\n\nI can help you register to vote, find your booth in Karnataka, or bust myths you've heard. \n\n**What shall we start with?**",
   timestamp: new Date(),
 };
 
@@ -233,7 +233,7 @@ export default function App() {
 
       <NewsTicker news={news} />
 
-      <main id="main-content" className="flex-1 flex overflow-hidden" role="main" aria-label="CivicSence Application">
+      <main id="main-content" className="flex-1 flex overflow-hidden" role="main" aria-label="CivicSense Application">
         {/* Sidebar Desktop */}
         <aside className="hidden lg:flex flex-col w-[320px] border-r-4 border-black bg-white overflow-y-auto" aria-label="Navigation sidebar">
           <div className="p-8 space-y-10">
@@ -377,7 +377,7 @@ export default function App() {
           <span>Neutrality: Certified</span>
           <span>Last Update: 14:32 IST</span>
         </div>
-        <div>CivicSence &copy; 2026 • Built for Democracy</div>
+        <div>CivicSense &copy; 2026 • Built for Democracy</div>
       </footer>
 
       {/* Mobile Sidebar */}
@@ -402,7 +402,7 @@ export default function App() {
                     aria-modal="true"
                 >
                     <div className="p-6 border-b-4 border-black flex justify-between items-center">
-                        <span className="text-2xl font-black italic">CIVICSENCE</span>
+                        <span className="text-2xl font-black italic">CIVICSENSE</span>
                         <button onClick={() => setIsSidebarOpen(false)} aria-label="Close navigation menu">
                             <X size={24} strokeWidth={3} />
                         </button>

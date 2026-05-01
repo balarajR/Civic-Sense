@@ -14,6 +14,7 @@ const stages = [
     title: "Voter Registration",
     description: "The first step is getting on the electoral roll. You'll need Form 6 if you're a new voter.",
     action: "Visit voters.eci.gov.in",
+    checklist: ["Confirm age eligibility", "Prepare age/address proof", "Submit Form 6", "Track approval"],
     icon: UserPlus,
     color: "bg-blue-500"
   },
@@ -22,6 +23,7 @@ const stages = [
     title: "EPIC Card / Voter ID",
     description: "Ensure your Aadhaar is linked and you have your EPIC number ready for identification.",
     action: "Link Aadhaar via 1950",
+    checklist: ["Check EPIC details", "Correct errors with Form 8", "Save digital voter ID"],
     icon: Search,
     color: "bg-indigo-500"
   },
@@ -30,6 +32,7 @@ const stages = [
     title: "Booth Lookup",
     description: "Find exactly where you'll cast your vote. Polling stations are usually within 2KM of home.",
     action: "Use Booth Finder",
+    checklist: ["Search electoral roll", "Note part and serial number", "Save booth address"],
     icon: MapPin,
     color: "bg-purple-500"
   },
@@ -38,6 +41,7 @@ const stages = [
     title: "Election Day",
     description: "Visit your booth with ID. You'll use an EVM and see your vote on the VVPAT screen.",
     action: "Know EVM Process",
+    checklist: ["Carry approved ID", "Verify identity", "Press EVM button", "Check VVPAT slip"],
     icon: CheckCircle2,
     color: "bg-emerald-500"
   },
@@ -46,6 +50,7 @@ const stages = [
     title: "The Result",
     description: "Votes are counted after all phases end. Results are published on the ECI Results portal.",
     action: "View Live Results",
+    checklist: ["Use official results portal", "Check constituency result", "Avoid unverified forwards"],
     icon: Calendar,
     color: "bg-orange-500"
   }
@@ -57,6 +62,10 @@ export default function JourneySimulator({ currentStage, onNext }: JourneySimula
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest leading-none">Voting Pipeline</h3>
         <span className="text-[10px] font-black bg-black text-white px-2 py-0.5">STEP {currentStage} / 5</span>
+      </div>
+
+      <div className="h-3 border-2 border-black bg-white" aria-label={`Journey progress ${currentStage} of 5`}>
+        <div className="h-full bg-orange-500" style={{ width: `${(currentStage / stages.length) * 100}%` }} />
       </div>
 
       <div className="space-y-4">
@@ -78,6 +87,7 @@ export default function JourneySimulator({ currentStage, onNext }: JourneySimula
                 isActive ? "bg-white bold-shadow ring-1 ring-black/5" : "bg-slate-50",
                 isCompleted && "bg-slate-100"
               )}
+              aria-current={isActive ? "step" : undefined}
             >
               <div className={cn(
                 "w-12 h-12 border-2 border-black flex items-center justify-center shrink-0 text-black",
@@ -107,8 +117,17 @@ export default function JourneySimulator({ currentStage, onNext }: JourneySimula
                     <p className="text-xs font-bold text-slate-700 leading-relaxed mb-4">
                       {stage.description}
                     </p>
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                      {stage.checklist.map((item) => (
+                        <li key={item} className="flex items-start gap-2 text-[10px] font-black uppercase text-slate-700">
+                          <CheckCircle2 size={12} strokeWidth={3} className="text-emerald-600 shrink-0 mt-0.5" aria-hidden="true" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
                     <button 
                       onClick={onNext}
+                      disabled={currentStage === stages.length}
                       className="w-full bg-orange-500 text-black border-2 border-black py-3 text-sm font-black uppercase bold-border bold-shadow-hover bold-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all"
                     >
                       {stage.action} →

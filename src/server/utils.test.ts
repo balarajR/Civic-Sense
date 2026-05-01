@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeInput, stripCodeFences, safeJsonParse } from './utils';
+import { buildLocalElectionAnswer, sanitizeInput, stripCodeFences, safeJsonParse } from './utils';
 
 describe('server utils', () => {
   describe('sanitizeInput', () => {
@@ -152,6 +152,29 @@ describe('server utils', () => {
       const fallback = { text: '' };
       const result = safeJsonParse(input, fallback);
       expect(result).toEqual({ text: 'Hello\n"World"' });
+    });
+  });
+
+  describe('buildLocalElectionAnswer', () => {
+    it('should route timeline questions to the timeline builder mode', () => {
+      const result = buildLocalElectionAnswer('What is the election timeline and counting date?');
+      expect(result.currentMode).toBe('TIMELINE_BUILDER');
+      expect(result.reply).toContain('Announcement');
+      expect(Array.isArray(result.uiData.events)).toBe(true);
+    });
+
+    it('should route registration questions to the journey simulator mode', () => {
+      const result = buildLocalElectionAnswer('How do I register as a new voter with Form 6?');
+      expect(result.currentMode).toBe('JOURNEY_SIMULATOR');
+      expect(result.reply).toContain('Form 6');
+      expect(result.nextAction).toContain('Journey');
+    });
+
+    it('should keep generic answers neutral and action oriented', () => {
+      const result = buildLocalElectionAnswer('Help me understand elections');
+      expect(result.currentMode).toBe('GENERAL');
+      expect(result.reply).toContain('registration');
+      expect(result.reply).toContain('https://voters.eci.gov.in');
     });
   });
 });

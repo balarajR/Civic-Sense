@@ -6,6 +6,10 @@ import { cn } from '../lib/utils';
 export default function BoothFinder() {
   const [address, setAddress] = useState('');
   const [showMap, setShowMap] = useState(false);
+  const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim();
+  const query = `${address.trim()} polling station Karnataka`;
+  const officialSearchUrl = 'https://electoralsearch.eci.gov.in';
+  const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -13,9 +17,6 @@ export default function BoothFinder() {
       setShowMap(true);
     }
   };
-
-  // Mock location for Bengaluru polling station for demo
-  const mapUrl = `https://www.google.com/maps/embed/v1/place?key=REPLACE_WITH_GOOGLE_MAPS_API_KEY&q=Polling+Station+Bengaluru+Karnataka`;
 
   return (
     <div className="space-y-6">
@@ -52,16 +53,26 @@ export default function BoothFinder() {
           className="space-y-4"
         >
           <div className="border-4 border-black bold-shadow bg-white overflow-hidden relative aspect-square lg:aspect-video">
-            <iframe
-              title="Google Maps polling booth location"
-              width="100%"
-              height="100%"
-              style={{ border: 0 }}
-              loading="lazy"
-              allowFullScreen
-              referrerPolicy="no-referrer-when-downgrade"
-              src={`https://www.google.com/maps/embed/v1/search?key=${(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || ''}&q=${encodeURIComponent(address + " polling station Karnataka")}`}
-            ></iframe>
+            {mapsApiKey ? (
+              <iframe
+                title="Google Maps polling booth location"
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                loading="lazy"
+                allowFullScreen
+                referrerPolicy="no-referrer-when-downgrade"
+                src={`https://www.google.com/maps/embed/v1/search?key=${mapsApiKey}&q=${encodeURIComponent(query)}`}
+              />
+            ) : (
+              <div className="h-full p-8 flex flex-col items-center justify-center text-center bg-slate-50">
+                <MapPin size={56} strokeWidth={3} className="text-orange-500 mb-4" />
+                <p className="text-lg font-black uppercase italic">Official verification needed</p>
+                <p className="text-xs font-bold text-slate-500 mt-2 max-w-sm">
+                  Map preview needs a Google Maps API key. Use the official ECI portal to confirm your assigned polling station.
+                </p>
+              </div>
+            )}
             
             <div className="absolute bottom-4 left-4 right-4 bg-white border-2 border-black p-3 bold-shadow flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -69,13 +80,20 @@ export default function BoothFinder() {
                     <MapPin size={16} strokeWidth={3} />
                 </div>
                 <div>
-                    <p className="text-[10px] font-black uppercase leading-none">Primary BoothFound</p>
-                    <p className="text-[9px] font-bold opacity-60">Within 1.2 KM of your location</p>
+                    <p className="text-[10px] font-black uppercase leading-none">Polling booth search ready</p>
+                    <p className="text-[9px] font-bold opacity-60">Verify final assignment with ECI/BLO records</p>
                 </div>
               </div>
-              <button className="bg-black text-white p-2 border border-black hover:bg-slate-800" aria-label="Navigate to polling booth">
+              <a
+                href={directionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                role="button"
+                className="bg-black text-white p-2 border border-black hover:bg-slate-800"
+                aria-label="Navigate to polling booth"
+              >
                 <Navigation size={14} strokeWidth={3} aria-hidden="true" />
-              </button>
+              </a>
             </div>
           </div>
 
@@ -85,7 +103,7 @@ export default function BoothFinder() {
           </div>
 
           <a 
-            href="https://electoralsearch.eci.gov.in" 
+            href={officialSearchUrl} 
             target="_blank" 
             rel="noopener noreferrer"
             aria-label="Open official ECI electoral search portal (opens in new tab)"

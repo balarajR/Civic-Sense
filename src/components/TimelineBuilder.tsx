@@ -7,6 +7,13 @@ interface TimelineBuilderProps {
   events?: TimelineEvent[];
 }
 
+const FALLBACK_TIMELINE: TimelineEvent[] = [
+  { title: 'Schedule Announcement', date: 'ECI notified', description: 'The official election schedule is announced and the Model Code of Conduct begins.', cta: 'Verify on ECI' },
+  { title: 'Nomination Period', date: 'Constituency-wise', description: 'Candidates file nominations, papers are scrutinized, and withdrawals close before the final list.' },
+  { title: 'Polling Window', date: 'Phase-wise', description: 'Voters cast their vote at assigned polling stations using EVM and VVPAT verification.' },
+  { title: 'Counting & Results', date: 'ECI notified', description: 'Votes are counted and constituency-wise results are published on the official results portal.' },
+];
+
 export default function TimelineBuilder({ events: initialEvents }: TimelineBuilderProps) {
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents || []);
   const [loading, setLoading] = useState<boolean>(!initialEvents || initialEvents.length === 0);
@@ -26,7 +33,10 @@ export default function TimelineBuilder({ events: initialEvents }: TimelineBuild
           setEvents(data.timeline);
         }
       })
-      .catch(console.error)
+      .catch((error) => {
+        console.error(error);
+        setEvents(FALLBACK_TIMELINE);
+      })
       .finally(() => setLoading(false));
   }, [initialEvents]);
 
@@ -83,7 +93,7 @@ export default function TimelineBuilder({ events: initialEvents }: TimelineBuild
 
       <div className="bg-orange-100 border-2 border-black p-4 flex gap-3 text-[10px] font-bold text-black uppercase italic leading-tight shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
         <AlertCircle size={16} strokeWidth={3} className="shrink-0" />
-        <p>Verification Required: Dates are subject to change by ECI. Always check official sources.</p>
+        <p>Verification Required: Dates are subject to change by ECI. Always check eci.gov.in and your state CEO portal before acting.</p>
       </div>
     </div>
   );

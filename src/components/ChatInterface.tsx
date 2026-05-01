@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, CheckCircle2, ChevronRight, Info, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Send, User, Bot, CalendarDays, MapPinned, UserPlus, BadgeHelp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { InteractionMode, Message, Persona } from '../types';
 import ReactMarkdown from 'react-markdown';
@@ -15,6 +15,12 @@ interface ChatInterfaceProps {
 export default function ChatInterface({ messages, onSendMessage, isLoading, detectedPersona }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const starterPrompts = [
+    { label: 'Register', prompt: 'Walk me through voter registration step by step.', icon: UserPlus },
+    { label: 'Timeline', prompt: 'Build an election timeline with each major step.', icon: CalendarDays },
+    { label: 'Booth', prompt: 'How do I find my polling booth and what should I carry?', icon: MapPinned },
+    { label: 'Myth', prompt: 'Help me fact-check an election claim neutrally.', icon: BadgeHelp },
+  ] as const;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -51,6 +57,7 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, dete
       <header className="p-4 border-b-2 border-black bg-slate-50 flex justify-between items-center">
         <div>
           <h2 className="text-xs font-black uppercase tracking-widest text-slate-900">Live Terminal</h2>
+          <p className="text-[10px] font-bold uppercase text-slate-500 mt-1">Ask for steps, dates, booth help, or myth checks</p>
         </div>
         <div className="flex items-center gap-3">
             {detectedPersona !== Persona.UNKNOWN && (
@@ -71,6 +78,9 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, dete
       <div 
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-6 space-y-8 scroll-smooth"
+        role="log"
+        aria-label="Conversation with CivicSense"
+        aria-live="polite"
       >
         <AnimatePresence initial={false}>
           {messages.map((m) => (
@@ -122,13 +132,28 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, dete
       </div>
 
       <form onSubmit={handleSubmit} className="p-6 border-t-2 border-black bg-white">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" aria-label="Suggested election questions">
+          {starterPrompts.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => onSendMessage(item.prompt)}
+              disabled={isLoading}
+              className="min-h-11 border-2 border-black bg-slate-50 px-3 py-2 flex items-center justify-center gap-2 text-[10px] font-black uppercase hover:bg-black hover:text-white disabled:opacity-50 transition-all"
+            >
+              <item.icon size={14} strokeWidth={3} aria-hidden="true" />
+              {item.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex gap-4">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="TYPE_YOUR_QUERY_HERE..."
-            aria-label="Type your query to CivicSence assistant"
+            aria-label="Type your query to CivicSense assistant"
             autoComplete="off"
             className="flex-1 bg-slate-50 border-2 border-black p-4 text-sm font-bold uppercase placeholder:opacity-30 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500 transition-all shadow-inner"
             disabled={isLoading}
@@ -137,9 +162,9 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, dete
             type="submit"
             disabled={!input.trim() || isLoading}
             aria-label="Send message"
-            className="bg-orange-500 text-black border-2 border-black px-6 font-black uppercase text-sm hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all bold-shadow disabled:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-orange-500 text-black border-2 border-black px-5 sm:px-6 font-black uppercase text-sm hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all bold-shadow disabled:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            SEND →
+            SEND <Send size={16} strokeWidth={3} aria-hidden="true" />
           </button>
         </div>
       </form>

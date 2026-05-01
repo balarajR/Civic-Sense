@@ -4,10 +4,10 @@ import { describe, it, expect, vi } from 'vitest';
 import ChatInterface from './ChatInterface';
 import { Persona } from '../types';
 
-// Mock motion/react to avoid animation issues in tests
+// Mock motion/react — filter out framer-motion props to avoid React DOM warnings
 vi.mock('motion/react', () => ({
   motion: {
-    div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) =>
+    div: ({ children, layout, initial, animate, exit, transition, whileHover, whileTap, whileInView, variants, ...props }: React.PropsWithChildren<Record<string, unknown>>) =>
       React.createElement('div', props, children),
   },
   AnimatePresence: ({ children }: React.PropsWithChildren) => React.createElement(React.Fragment, null, children),
@@ -22,7 +22,7 @@ const defaultMessages = [
   {
     id: '1',
     role: 'assistant' as const,
-    content: 'Welcome to CivicSence!',
+    content: 'Welcome to CivicSense!',
     timestamp: new Date(),
   },
 ];
@@ -51,7 +51,7 @@ describe('ChatInterface Component', () => {
         detectedPersona={Persona.UNKNOWN}
       />
     );
-    expect(screen.getByText('Welcome to CivicSence!')).toBeInTheDocument();
+    expect(screen.getByText('Welcome to CivicSense!')).toBeInTheDocument();
   });
 
   it('should render the input field with placeholder', () => {
@@ -176,7 +176,7 @@ describe('ChatInterface Component', () => {
         detectedPersona={Persona.UNKNOWN}
       />
     );
-    expect(screen.getByText('SEND →')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send message/i })).toBeInTheDocument();
   });
 
   it('should disable send button when input is empty', () => {
@@ -188,7 +188,21 @@ describe('ChatInterface Component', () => {
         detectedPersona={Persona.UNKNOWN}
       />
     );
-    const button = screen.getByText('SEND →');
+    const button = screen.getByRole('button', { name: /send message/i });
     expect(button).toBeDisabled();
+  });
+
+  it('should send starter prompts when quick action buttons are clicked', () => {
+    const mockFn = vi.fn();
+    render(
+      <ChatInterface
+        messages={defaultMessages}
+        onSendMessage={mockFn}
+        isLoading={false}
+        detectedPersona={Persona.UNKNOWN}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /timeline/i }));
+    expect(mockFn).toHaveBeenCalledWith('Build an election timeline with each major step.');
   });
 });

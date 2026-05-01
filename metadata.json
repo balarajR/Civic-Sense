@@ -1,5 +1,5 @@
 {
-  "name": "CivicSence",
+  "name": "CivicSense",
   "description": "An intelligent, politically neutral election education assistant for India, providing state-level awareness for Karnataka and interactive civic tools.",
   "requestFramePermissions": [
     "geolocation"

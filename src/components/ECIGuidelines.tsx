@@ -94,11 +94,13 @@ export default function ECIGuidelines() {
       </div>
 
       {/* Category Filter */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Guideline category filters">
         {['ALL', 'MCC', 'VOTER', 'CANDIDATE'].map((cat) => (
           <button
             key={cat}
-            onClick={() => setSelectedCategory(cat as any)}
+            onClick={() => setSelectedCategory(cat as Guideline['category'] | 'ALL')}
+            aria-pressed={selectedCategory === cat}
+            aria-label={`Filter guidelines by ${cat === 'ALL' ? 'all categories' : cat}`}
             className={cn(
               "px-4 py-2 border-2 border-black font-black text-[10px] uppercase transition-all",
               selectedCategory === cat ? "bg-black text-white" : "bg-white hover:bg-slate-50"
@@ -131,6 +133,7 @@ export default function ECIGuidelines() {
                   <button
                     onClick={() => handleSummarize(g)}
                     disabled={loadingIds.has(g.id)}
+                    aria-label={`${summaries[g.id] ? 'View AI summary for' : 'Generate AI summary for'} ${g.title}`}
                     className={cn(
                       "flex items-center gap-1.5 px-2 py-1 border border-black text-[9px] font-black uppercase transition-all",
                       summaries[g.id] 
@@ -139,9 +142,9 @@ export default function ECIGuidelines() {
                     )}
                   >
                     {loadingIds.has(g.id) ? (
-                      <Loader2 size={10} className="animate-spin" />
+                      <Loader2 size={10} className="animate-spin" aria-hidden="true" />
                     ) : (
-                      <Sparkles size={10} />
+                      <Sparkles size={10} aria-hidden="true" />
                     )}
                     {summaries[g.id] ? "Summarized" : "AI Summarize"}
                   </button>
@@ -183,9 +186,11 @@ export default function ECIGuidelines() {
       <a 
         href="https://eci.gov.in/important-instructions/" 
         target="_blank" 
+        rel="noopener noreferrer"
+        aria-label="View full election manuals on the Election Commission of India website (opens in new tab)"
         className="w-full flex items-center justify-center gap-2 border-2 border-black py-4 font-black uppercase text-xs hover:bg-slate-900 hover:text-white transition-all bold-shadow-hover"
       >
-        FULL MANUALS AT ECI.GOV.IN <Info size={14} strokeWidth={3} />
+        FULL MANUALS AT ECI.GOV.IN <Info size={14} strokeWidth={3} aria-hidden="true" />
       </a>
     </div>
   );

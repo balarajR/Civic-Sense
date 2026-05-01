@@ -59,7 +59,7 @@ export default function LiveResults() {
 
   if (error) {
     return (
-      <div className="p-8 border-4 border-black bg-red-50 text-center space-y-4">
+      <div className="p-8 border-4 border-black bg-red-50 text-center space-y-4" role="alert">
         <AlertCircle size={32} className="mx-auto text-red-500" />
         <p className="font-bold text-sm">Failed to load real-time election data.</p>
         <button onClick={fetchData} className="px-4 py-2 bg-black text-white font-black text-xs uppercase hover:bg-slate-800 transition-colors">
@@ -79,7 +79,8 @@ export default function LiveResults() {
   }
 
   // Calculate percentages for bars
-  const maxSeats = Math.max(...data.national.parties.map(p => p.total));
+  const parties = Array.isArray(data.national.parties) ? data.national.parties : [];
+  const maxSeats = Math.max(1, ...parties.map(p => p.total));
 
   return (
     <div className="space-y-6">
@@ -96,14 +97,15 @@ export default function LiveResults() {
         <button 
           onClick={fetchData} 
           disabled={loading}
+          aria-label="Refresh election results data"
           className="p-2 border-2 border-black hover:bg-slate-100 transition-colors disabled:opacity-50"
         >
-          <RefreshCw size={14} className={cn(loading && "animate-spin")} />
+          <RefreshCw size={14} className={cn(loading && "animate-spin")} aria-hidden="true" />
         </button>
       </div>
 
       {/* Top Level Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" role="group" aria-label="Election statistics overview">
         <div className="p-4 bg-slate-50 border-2 border-black bold-shadow-sm flex flex-col items-center text-center justify-center">
             <p className="text-[9px] font-black uppercase opacity-60 mb-1">Total Seats</p>
             <p className="text-xl font-black">{data.national.totalConstituencies}</p>
@@ -117,7 +119,6 @@ export default function LiveResults() {
             <p className="text-xl font-black">{data.national.leading}</p>
         </div>
          <div className="p-4 bg-black text-white border-2 border-black bold-shadow-sm flex flex-col items-center text-center justify-center relative overflow-hidden">
-             <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
             <p className="text-[9px] font-black uppercase opacity-60 mb-1 z-10">Voter Turnout</p>
             <p className="text-xl font-black text-yellow-400 z-10">{data.turnout.nationalAverage}</p>
         </div>
@@ -131,7 +132,13 @@ export default function LiveResults() {
         </div>
 
         <div className="space-y-4">
-          {data.national.parties.map((party, idx) => {
+          {parties.length === 0 && (
+            <div className="p-6 border-2 border-dashed border-slate-300 text-center">
+              <p className="text-xs font-black uppercase text-slate-500">No party trend data available yet.</p>
+            </div>
+          )}
+
+          {parties.map((party, idx) => {
             const widthPct = (party.total / maxSeats) * 100;
             
             return (

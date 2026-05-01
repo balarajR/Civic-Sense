@@ -1,4 +1,4 @@
-# CivicSence — AI Election Education Assistant
+# CivicSense — AI Election Education Assistant
 
 > An intelligent, politically neutral civic assistant that empowers Indian citizens to make informed electoral decisions through real-time data, interactive tools, and AI-powered guidance.
 
@@ -12,7 +12,7 @@
 
 ## 🧠 Core Approach & Logic
 
-CivicSence is not a simple chatbot. It implements a **multi-modal civic intelligence system** that combines:
+CivicSense is not a simple chatbot. It implements a **multi-modal civic intelligence system** that combines:
 
 ### 1. AI Persona Detection Engine
 The system dynamically detects user intent and adapts its communication style:
@@ -125,9 +125,9 @@ The system is hardcoded to **never** express opinions on parties, leaders, or po
 
 This project demonstrates **deep, meaningful integration** with multiple Google Cloud services:
 
-### 1. Vertex AI — Gemini 2.5 Flash
+### 1. Vertex AI Gemini 2.5 Flash
 - **7 distinct AI endpoints** — chat, summarize, timeline, candidates, results, news, health
-- Model: `gemini-2.5-flash` via Vertex AI (not API key — uses ADC authentication)
+- Model: `gemini-2.5-flash` through Vertex AI / Gemini Enterprise mode in the official `@google/genai` SDK
 - Structured JSON output with custom parsing for grounded responses
 
 ### 2. Google Search Grounding (Live Data)
@@ -143,9 +143,9 @@ This project demonstrates **deep, meaningful integration** with multiple Google 
 - Initialized conditionally (graceful degradation for unsupported environments)
 - Tracks user engagement patterns across tool modes
 
-### 5. Google Cloud Authentication (ADC)
-- Uses Application Default Credentials for secure, keyless Vertex AI access
-- GCP project and location configured via environment variables
+### 5. Secure Server-Side Credentials
+- Uses Google Cloud project/location configuration and Application Default Credentials or a Cloud Run service account
+- No private AI keys are exposed to the browser bundle
 
 ---
 
@@ -161,9 +161,9 @@ npm install
 
 # 3. Configure environment
 cp .env.example .env
-# Fill in: GCP project, Maps API key, Firebase config, etc.
+# Fill in: GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, optional Maps API key, Firebase config, etc.
 
-# 4. Authenticate with Google Cloud
+# 4. Authenticate locally for Vertex AI
 gcloud auth application-default login
 
 # 5. Start the development server
@@ -199,7 +199,7 @@ CivicSense/
     ├── server/
     │   ├── utils.ts          # Input sanitization, JSON parsing helpers
     │   ├── utils.test.ts     # Unit tests — 10 tests
-    │   └── api.test.ts       # Integration tests — 8 tests (mocked Gemini)
+    │   └── api.test.ts       # Integration tests — mocked Vertex AI/Gemini
     └── components/
         ├── ChatInterface.tsx        # AI conversation terminal
         ├── JourneySimulator.tsx     # 5-stage voting walkthrough
@@ -218,7 +218,7 @@ CivicSense/
 
 ## 🧪 Testing
 
-**21 tests across 3 suites — all passing.**
+**151 tests across 13 suites — all passing.**
 
 ```bash
 npm test          # Run full test suite (Vitest)
@@ -227,9 +227,9 @@ npm run test:watch  # Watch mode during development
 
 | Suite | File | Tests | What it covers |
 |-------|------|-------|----------------|
-| Unit | `src/server/utils.test.ts` | 10 | sanitizeInput, stripCodeFences, safeJsonParse |
-| Component | `src/components/NewsTicker.test.tsx` | 3 | React render, empty state, content |
-| Integration | `src/server/api.test.ts` | 8 | All API endpoints with mocked Gemini |
+| Unit | `src/server/utils.test.ts` | 30+ | sanitization, JSON parsing, local election fallbacks |
+| Component | `src/components/*.test.tsx` | 100+ | React tools, accessibility labels, fallbacks, interactions |
+| Integration | `src/server/api.test.ts` | 20+ | API endpoints with mocked Vertex AI/Gemini responses |
 
 Additional quality gates:
 - **Type Safety** — `tsc --noEmit` passes with zero errors
@@ -250,7 +250,7 @@ Push to main
     │
     ▼
 ┌─────────────────────┐
-│  🧪 CI Job          │  TypeScript check + 21 Vitest tests
+│  🧪 CI Job          │  TypeScript check + 151 Vitest tests
 └─────────┬───────────┘
           │ pass
           ▼
@@ -277,8 +277,10 @@ gcloud config set project civic-sence
 chmod +x scripts/setup-gcp.sh
 ./scripts/setup-gcp.sh
 
-# 3. Add secret values to Secret Manager
-echo -n "your-gemini-key" | gcloud secrets versions add GEMINI_API_KEY --data-file=-
+# 3. Grant the Cloud Run service account Vertex AI access
+gcloud projects add-iam-policy-binding civic-sence \
+  --member="serviceAccount:YOUR_SERVICE_ACCOUNT" \
+  --role="roles/aiplatform.user"
 ```
 
 ### GitHub Secrets Required
@@ -301,7 +303,7 @@ Go to **Settings → Secrets → Actions** in your GitHub repo and add:
 | `VITE_GOOGLE_MAPS_API_KEY` | Google Maps JS API key |
 | `APP_URL` | Cloud Run service URL (update after first deploy) |
 
-> **Note:** `GEMINI_API_KEY` and `DATA_GOV_IN_API_KEY` are stored in **GCP Secret Manager** (not GitHub Secrets) and injected at Cloud Run runtime.
+> **Note:** AI calls use Vertex AI credentials, not `GEMINI_API_KEY`. `DATA_GOV_IN_API_KEY` is optional and can be stored in Secret Manager if used.
 
 ### Manual Deploy
 
