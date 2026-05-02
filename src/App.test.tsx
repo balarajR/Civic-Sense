@@ -2,6 +2,14 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import App from './App';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+interface JourneySimulatorMockProps {
+  onNext: () => void;
+}
+
+interface CivicQuizMockProps {
+  onComplete: (score: number) => void;
+}
+
 // Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -22,11 +30,11 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 vi.mock('./components/JourneySimulator', () => ({
-  default: ({ onNext }: any) => <button onClick={onNext} data-testid="next-journey-btn">Next Journey Stage</button>
+  default: ({ onNext }: JourneySimulatorMockProps) => <button onClick={onNext} data-testid="next-journey-btn">Next Journey Stage</button>
 }));
 
 vi.mock('./components/CivicQuiz', () => ({
-  default: ({ onComplete }: any) => <button onClick={() => onComplete(85)} data-testid="complete-quiz-btn">Complete Quiz</button>
+  default: ({ onComplete }: CivicQuizMockProps) => <button onClick={() => onComplete(85)} data-testid="complete-quiz-btn">Complete Quiz</button>
 }));
 
 describe('App', () => {

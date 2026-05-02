@@ -12,9 +12,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run lint
-      - run: npm run test:coverage
-      - run: npm audit --audit-level=high || true
+      - run: npm run quality
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:

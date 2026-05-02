@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "description": "AI-powered, politically neutral election education assistant for India",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
@@ -16,6 +19,7 @@
     "audit": "npm audit --audit-level=high",
     "audit:fix": "npm audit fix",
     "check-deps": "npx depcheck --ignores=tailwindcss",
+    "quality": "npm run lint && npm run test:coverage && npm run build && npm run check-deps && npm run audit",
     "start": "NODE_ENV=production node --import tsx server.ts"
   },
   "dependencies": {

@@ -95,7 +95,7 @@ export default function LiveResults(): React.JSX.Element {
   if (error) {
     return (
       <div className="p-8 border-4 border-black bg-red-50 text-center space-y-4" role="alert">
-        <AlertCircle size={32} className="mx-auto text-red-500" />
+        <AlertCircle size={32} className="mx-auto text-red-500" aria-hidden="true" />
         <p className="font-bold text-sm">Failed to load real-time election data.</p>
         <button onClick={fetchData} className="px-4 py-2 bg-black text-white font-black text-xs uppercase hover:bg-slate-800 transition-colors">
           Retry Connection
@@ -106,8 +106,8 @@ export default function LiveResults(): React.JSX.Element {
 
   if (!data) {
     return (
-      <div className="p-12 flex flex-col items-center justify-center space-y-4 border-2 border-dashed border-slate-300">
-        <RefreshCw size={32} className="animate-spin text-slate-400" />
+      <div className="p-12 flex flex-col items-center justify-center space-y-4 border-2 border-dashed border-slate-300" role="status" aria-live="polite">
+        <RefreshCw size={32} className="animate-spin text-slate-400" aria-hidden="true" />
         <p className="font-black text-xs uppercase text-slate-400 italic">Establishing SECURE Connection to Govt API...</p>
       </div>
     );
@@ -124,7 +124,7 @@ export default function LiveResults(): React.JSX.Element {
           <div className="flex items-center gap-2">
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest leading-none">Live Analytics</h3>
             <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.5 font-black uppercase flex items-center gap-1 animate-pulse">
-              <Activity size={10} /> Live
+              <Activity size={10} aria-hidden="true" /> Live
             </span>
           </div>
           <p className="text-[10px] font-bold text-slate-500 italic uppercase">Source: {data.source}</p>
@@ -162,7 +162,7 @@ export default function LiveResults(): React.JSX.Element {
       {/* Party Leaderboard */}
       <div className="border-4 border-black p-4 md:p-6 bg-white bold-shadow">
         <div className="flex items-center gap-2 mb-6">
-          <BarChart3 size={18} strokeWidth={3} />
+          <BarChart3 size={18} strokeWidth={3} aria-hidden="true" />
           <h4 className="text-sm font-black uppercase">National Trends</h4>
         </div>
 
@@ -213,7 +213,7 @@ export default function LiveResults(): React.JSX.Element {
       
       <div className="bg-slate-100 border-x-2 border-b-2 border-black p-3 -mt-6">
         <p className="text-[9px] font-bold text-slate-500 italic flex items-center gap-1 uppercase">
-            <Eye size={12} /> Last synced: {new Date(data.timestamp).toLocaleTimeString()}
+            <Eye size={12} aria-hidden="true" /> Last synced: {new Date(data.timestamp).toLocaleTimeString()}
         </p>
       </div>
 

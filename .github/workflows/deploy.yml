@@ -38,11 +38,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: TypeScript type check
-        run: npx tsc --noEmit
-
-      - name: Run comprehensive test suite
-        run: npm test
+      - name: Run quality gates
+        run: npm run quality
 
   # ── Job 2: Deploy — Build image & deploy to Cloud Run ─────────────────────
   deploy:
@@ -122,7 +119,7 @@ jobs:
           env_vars: |
             NODE_ENV=production
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-            GCP_LOCATION=${{ secrets.GCP_REGION }}
+            GOOGLE_CLOUD_LOCATION=${{ secrets.GCP_REGION }}
             APP_URL=${{ env.APP_URL }}
 
           # Secrets pulled from GCP Secret Manager at runtime

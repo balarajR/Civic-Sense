@@ -32,6 +32,8 @@ const mockApiResponse = {
   },
 };
 
+type MockFetchResponse = Pick<Response, 'ok' | 'json'>;
+
 describe('LiveResults Component', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -95,7 +97,7 @@ describe('LiveResults Component', () => {
   });
 
   it('should apply spin animation to refresh button while loading', async () => {
-    let resolvePromise: (value: any) => void;
+    let resolvePromise: (value: MockFetchResponse) => void;
     
     global.fetch = vi.fn()
       .mockImplementationOnce(() => Promise.resolve({

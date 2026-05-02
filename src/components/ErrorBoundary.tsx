@@ -74,7 +74,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
           role="alert"
           className="flex flex-col items-center justify-center p-8 bg-red-50 border-2 border-black text-center"
         >
-          <AlertTriangle size={48} strokeWidth={3} className="text-red-600 mb-4" />
+          <AlertTriangle size={48} strokeWidth={3} className="text-red-600 mb-4" aria-hidden="true" />
           <h2 className="text-lg font-black uppercase mb-2">Something went wrong</h2>
           <p className="text-sm font-bold text-slate-600 mb-6 max-w-md">
             {this.props.fallbackMessage ||
@@ -84,7 +84,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
             onClick={this.handleReset}
             className="flex items-center gap-2 bg-black text-white px-6 py-3 font-black uppercase text-sm border-2 border-black hover:bg-slate-800 transition-colors"
           >
-            <RefreshCw size={16} strokeWidth={3} />
+            <RefreshCw size={16} strokeWidth={3} aria-hidden="true" />
             Retry
           </button>
         </div>

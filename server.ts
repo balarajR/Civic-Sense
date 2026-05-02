@@ -406,6 +406,8 @@ export async function createApp(): Promise<express.Express> {
   const hmrPort = await findAvailablePort(requestedHmrPort);
   const isProduction = process.env.NODE_ENV === 'production';
 
+  app.disable('x-powered-by');
+
   // Trust Cloud Run / GCP load balancer proxy (fixes rate-limiter X-Forwarded-For warning)
   app.set('trust proxy', 1);
 
@@ -423,12 +425,20 @@ export async function createApp(): Promise<express.Express> {
         connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseio.com', 'https://firestore.googleapis.com', 'ws:', 'wss:'],
         fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
         frameSrc:   ["'self'", 'https://www.google.com'],
+        frameAncestors: ["'none'"],
         objectSrc:  ["'none'"],
+        baseUri:    ["'self'"],
+        formAction: ["'self'"],
       },
     },
     hsts:           { maxAge: 31_536_000, includeSubDomains: true },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   }));
+
+  app.use((_req, res, next) => {
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self), payment=(), usb=()');
+    next();
+  });
 
   // CORS — restrict to known origins (never wildcard in production)
   const ALLOWED_ORIGINS = [

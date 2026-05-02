@@ -147,9 +147,9 @@ export default function ECIGuidelines(): React.JSX.Element {
           >
             <div className="flex items-start gap-4 mb-6">
               <div className="w-12 h-12 bg-black text-white flex items-center justify-center shrink-0">
-                {g.category === 'MCC' && <Gavel size={24} strokeWidth={3} />}
-                {g.category === 'VOTER' && <Users size={24} strokeWidth={3} />}
-                {g.category === 'CANDIDATE' && <UserCheck size={24} strokeWidth={3} />}
+                {g.category === 'MCC' && <Gavel size={24} strokeWidth={3} aria-hidden="true" />}
+                {g.category === 'VOTER' && <Users size={24} strokeWidth={3} aria-hidden="true" />}
+                {g.category === 'CANDIDATE' && <UserCheck size={24} strokeWidth={3} aria-hidden="true" />}
               </div>
               <div>
                 <div className="flex items-center gap-3 mb-1">
@@ -193,7 +193,7 @@ export default function ECIGuidelines(): React.JSX.Element {
             <ul className="space-y-3">
               {g.details.map((detail, idx) => (
                 <li key={idx} className="flex gap-3 text-[11px] font-bold leading-snug">
-                  <ChevronRight size={14} strokeWidth={3} className="shrink-0 text-orange-500 mt-0.5" />
+                  <ChevronRight size={14} strokeWidth={3} className="shrink-0 text-orange-500 mt-0.5" aria-hidden="true" />
                   <span>{detail}</span>
                 </li>
               ))}
@@ -203,7 +203,7 @@ export default function ECIGuidelines(): React.JSX.Element {
       </div>
 
       <div className="bg-orange-50 border-2 border-black p-4 flex gap-3 text-[10px] font-bold text-black uppercase italic leading-tight">
-        <ShieldCheck size={18} strokeWidth={3} className="shrink-0 text-orange-600" />
+        <ShieldCheck size={18} strokeWidth={3} className="shrink-0 text-orange-600" aria-hidden="true" />
         <p>Compliance Notice: Violations can lead to disqualification or legal action under the Representation of the People Act, 1951.</p>
       </div>
 
