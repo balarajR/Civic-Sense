@@ -13,9 +13,7 @@
  */
 
 /** Supported log severity levels. */
-const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 } as const;
-
-type LogLevel = keyof typeof LOG_LEVELS;
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**
  * Builds a structured JSON log entry and writes it to the appropriate console stream.

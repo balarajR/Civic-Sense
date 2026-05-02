@@ -13,8 +13,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Users, Info, ChevronRight, Scale, GraduationCap, Briefcase, AlertTriangle } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Users, Info, Scale, GraduationCap, Briefcase, AlertTriangle } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 /** Shape of a single candidate fetched from the API or used as fallback. */

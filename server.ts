@@ -15,7 +15,8 @@
  */
 
 import 'dotenv/config';
-import express, { Request, Response } from 'express';
+import type { Request, Response } from 'express';
+import express from 'express';
 import compression from 'compression';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -172,6 +173,10 @@ class ResponseCache {
   set<T>(key: string, data: T, ttlMs: number): void {
     this.store.set(key, { data, expiresAt: Date.now() + ttlMs });
   }
+
+  size(): number {
+    return this.store.size;
+  }
 }
 
 const cache = new ResponseCache();
@@ -181,6 +186,7 @@ const cache = new ResponseCache();
 // ────────────────────────────────────────────────────────────
 
 const DEFAULT_HMR_PORT = 24678;
+const GOOGLE_SEARCH_TOOL = { googleSearch: {} };
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -483,7 +489,7 @@ export async function createApp(): Promise<express.Express> {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
-      cacheKeys: cache['store'].size,
+      cacheKeys: cache.size(),
     });
   });
 
@@ -494,7 +500,7 @@ export async function createApp(): Promise<express.Express> {
    */
   app.post('/api/chat', async (req: Request, res: Response) => {
     try {
-      const messages = validateChatMessages((req.body as Record<string, unknown>).messages) as ChatMessage[];
+      const messages: ChatMessage[] = validateChatMessages((req.body as Record<string, unknown>).messages);
 
       // Build Gemini-compatible history (must start with 'user' role)
       const history = messages.slice(0, -1).map((m: ChatMessage) => ({
@@ -509,7 +515,7 @@ export async function createApp(): Promise<express.Express> {
         model: MODEL_ID,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
-          tools: [{ googleSearch: {} } as Record<string, unknown>],
+          tools: [GOOGLE_SEARCH_TOOL],
         },
         history: validHistory,
       });
@@ -590,7 +596,7 @@ Only output the JSON array, no markdown blocks.`;
       const response = await getAiClient().models.generateContent({
         model: MODEL_ID,
         contents: prompt,
-        config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
+        config: { tools: [GOOGLE_SEARCH_TOOL] },
       });
 
       const timeline = safeJsonParse<TimelineItem[]>(response.text || '[]', FALLBACK_TIMELINE);
@@ -656,7 +662,7 @@ Only output the JSON array.`;
       const response = await getAiClient().models.generateContent({
         model: MODEL_ID,
         contents: prompt,
-        config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
+        config: { tools: [GOOGLE_SEARCH_TOOL] },
       });
 
       const candidates = safeJsonParse<CandidateRecord[]>(response.text || '[]', []);
@@ -701,7 +707,7 @@ Only output the JSON object.`;
       const response = await getAiClient().models.generateContent({
         model: MODEL_ID,
         contents: prompt,
-        config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
+        config: { tools: [GOOGLE_SEARCH_TOOL] },
       });
 
       const fallback: ElectionResults = {
@@ -756,7 +762,7 @@ Return as a JSON array of strings. Only output the JSON array.`;
       const response = await getAiClient().models.generateContent({
         model: MODEL_ID,
         contents: prompt,
-        config: { tools: [{ googleSearch: {} } as Record<string, unknown>] },
+        config: { tools: [GOOGLE_SEARCH_TOOL] },
       });
 
       const news = safeJsonParse<string[]>(response.text || '[]', FALLBACK_NEWS);

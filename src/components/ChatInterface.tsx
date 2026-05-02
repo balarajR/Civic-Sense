@@ -15,7 +15,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, User, Bot, CalendarDays, MapPinned, UserPlus, BadgeHelp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { InteractionMode, Message, Persona } from '../types';
+import type { Message } from '../types';
+import { Persona } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
 

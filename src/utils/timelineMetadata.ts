@@ -1,4 +1,5 @@
-import { InteractionMode, Message, TimelineEvent } from '../types';
+import type { Message, TimelineEvent } from '../types';
+import { InteractionMode } from '../types';
 
 export function isTimelineEvent(value: unknown): value is TimelineEvent {
   if (!value || typeof value !== 'object') return false;

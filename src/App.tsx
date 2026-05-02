@@ -15,7 +15,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Vote,
-  MapPin,
   Calendar,
   Search,
   Award,
@@ -30,7 +29,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import NewsTicker from './components/NewsTicker';
 import { FALLBACK_NEWS_HEADLINES } from './config/constants';
 import { getTimelineEventsFromMessages } from './utils/timelineMetadata';
-import { Message, Persona, InteractionMode, QuizQuestion } from './types';
+import type { Message, QuizQuestion } from './types';
+import { Persona, InteractionMode } from './types';
 import { cn } from './lib/utils';
 
 /** Lazy-load heavy components to reduce initial bundle & unused JS. */
@@ -84,6 +84,14 @@ const TOOL_NAV = [
 
 function createMessageId(role: Message['role']): string {
   return `${role}-${crypto.randomUUID()}`;
+}
+
+function isPersona(value: unknown): value is Persona {
+  return typeof value === 'string' && Object.values(Persona).includes(value as Persona);
+}
+
+function isInteractionMode(value: unknown): value is InteractionMode {
+  return typeof value === 'string' && Object.values(InteractionMode).includes(value as InteractionMode);
 }
 
 /**
@@ -172,19 +180,22 @@ export default function App(): React.JSX.Element {
         uiData?: Record<string, unknown>;
       };
       
+      const detectedPersona = isPersona(data.detectedPersona) ? data.detectedPersona : undefined;
+      const responseMode = isInteractionMode(data.currentMode) ? data.currentMode : undefined;
+
       const assistantMessage: Message = {
         id: createMessageId('assistant'),
         role: 'assistant',
         content: data.reply || "I'm processing your request.",
         timestamp: new Date(),
-        persona: data.detectedPersona as Persona,
-        mode: data.currentMode as InteractionMode,
+        persona: detectedPersona,
+        mode: responseMode,
         metadata: data.uiData
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      if (data.detectedPersona) setDetectedPersona(data.detectedPersona as Persona);
-      if (data.currentMode) setCurrentMode(data.currentMode as InteractionMode);
+      if (detectedPersona) setDetectedPersona(detectedPersona);
+      if (responseMode) setCurrentMode(responseMode);
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setMessages(prev => [...prev, {

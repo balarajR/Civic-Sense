@@ -15,7 +15,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Calendar, Info, Clock, AlertCircle } from 'lucide-react';
-import { TimelineEvent } from '../types';
+import type { TimelineEvent } from '../types';
 
 /** Props accepted by the TimelineBuilder component. */
 interface TimelineBuilderProps {

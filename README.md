@@ -221,8 +221,11 @@ CivicSense/
 **292 tests across 24 suites — all passing.**
 
 ```bash
+npm run lint        # ESLint static analysis
+npm run typecheck   # TypeScript strict-mode verification
 npm test          # Run full test suite (Vitest)
 npm run test:watch  # Watch mode during development
+npm run quality     # lint + typecheck + 100% coverage + build + depcheck + audit
 ```
 
 | Suite | File | Tests | What it covers |
@@ -232,7 +235,10 @@ npm run test:watch  # Watch mode during development
 | Integration | `src/server/api.test.ts` | 20+ | API endpoints with mocked Vertex AI/Gemini responses |
 
 Additional quality gates:
+- **Static Analysis** — ESLint flat config covers TypeScript, React hooks, unused code, and unsafe `any`
 - **Type Safety** — `tsc --noEmit` passes with zero errors
+- **Coverage Enforcement** — Vitest requires 100% statements, branches, functions, and lines
+- **Dependency Hygiene** — build-only tooling is isolated in `devDependencies`, with `depcheck` in the quality gate
 - **Runtime Validation** — `safeJsonParse` validates all AI output before serving
 - **Error Resilience** — Every endpoint has `try/catch` with graceful fallbacks
 - **Security** — `helmet`, `cors`, and `express-rate-limit` active on all routes
@@ -250,7 +256,7 @@ Push to main
     │
     ▼
 ┌─────────────────────┐
-│  🧪 CI Job          │  TypeScript check + 151 Vitest tests
+│  🧪 CI Job          │  ESLint + TypeScript + 292 Vitest tests
 └─────────┬───────────┘
           │ pass
           ▼

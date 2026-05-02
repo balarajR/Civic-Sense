@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import request from 'supertest';
-import express from 'express';
+import type express from 'express';
 
 // ── Mock vite so esbuild is never loaded in the JSDOM env ────
 vi.mock('vite', () => ({
@@ -42,7 +42,6 @@ vi.mock('@google/genai', () => {
 });
 
 // ── Import after mocking ─────────────────────────────────────
-// eslint-disable-next-line import/first
 import { createApp } from '../../server';
 
 describe('CivicSense API Endpoints', () => {

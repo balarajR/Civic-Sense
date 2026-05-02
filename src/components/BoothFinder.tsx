@@ -15,7 +15,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { MapPin, Search, Navigation, Info, ExternalLink } from 'lucide-react';
-import { cn } from '../lib/utils';
 
 /**
  * BoothFinder — Interactive polling booth locator with Google Maps embed

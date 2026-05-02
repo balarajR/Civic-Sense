@@ -14,8 +14,8 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { HelpCircle, CheckCircle2, XCircle, Award, RefreshCw } from 'lucide-react';
-import { QuizQuestion } from '../types';
+import { CheckCircle2, XCircle, Award } from 'lucide-react';
+import type { QuizQuestion } from '../types';
 import { cn } from '../lib/utils';
 
 /** Props accepted by the CivicQuiz component. */

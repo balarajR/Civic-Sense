@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { InteractionMode, Message } from '../types';
+import type { Message } from '../types';
+import { InteractionMode } from '../types';
 import { getTimelineEventsFromMessages, isTimelineEvent } from './timelineMetadata';
 
 const baseMessage: Message = {

@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, ChevronRight, MapPin, Search, Calendar, UserPlus } from 'lucide-react';
+import { CheckCircle2, MapPin, Search, Calendar, UserPlus } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 /** Props accepted by the JourneySimulator component. */

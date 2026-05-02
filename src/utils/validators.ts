@@ -16,7 +16,7 @@ import { ValidationError } from './errors';
 
 /** Shape of a single chat message from the client. */
 interface ChatMessageInput {
-  role: string;
+  role: 'user' | 'assistant' | 'model';
   content: string;
 }
 
@@ -43,14 +43,21 @@ export function validateChatMessages(messages: unknown): ChatMessageInput[] {
     throw new ValidationError('Messages array is required and must not be empty.');
   }
 
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i];
-    if (!msg || typeof msg.role !== 'string' || typeof msg.content !== 'string') {
-      throw new ValidationError(`Message at index ${i} must have 'role' (string) and 'content' (string).`);
+  return messages.map((message, index) => {
+    if (!message || typeof message !== 'object') {
+      throw new ValidationError(`Message at index ${index} must be a JSON object.`);
     }
-  }
 
-  return messages as ChatMessageInput[];
+    const { role, content } = message as Record<string, unknown>;
+    if (role !== 'user' && role !== 'assistant' && role !== 'model') {
+      throw new ValidationError(`Message at index ${index} must have role 'user', 'assistant', or 'model'.`);
+    }
+    if (typeof content !== 'string') {
+      throw new ValidationError(`Message at index ${index} must have 'content' (string).`);
+    }
+
+    return { role, content };
+  });
 }
 
 /**
@@ -79,11 +86,13 @@ export function validateSummarizeInput(body: unknown): SummarizeInput {
     throw new ValidationError('Description is required and must be a non-empty string.');
   }
 
-  if (details !== undefined && !Array.isArray(details)) {
-    throw new ValidationError('Details must be an array of strings when provided.');
+  if (details !== undefined) {
+    if (!Array.isArray(details) || details.some((detail) => typeof detail !== 'string')) {
+      throw new ValidationError('Details must be an array of strings when provided.');
+    }
   }
 
-  return { title: title as string, description: description as string, details: details as string[] | undefined };
+  return { title, description, details };
 }
 
 /**
