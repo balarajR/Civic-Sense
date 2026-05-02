@@ -2,6 +2,10 @@ node_modules/
 build/
 dist/
 coverage/
+coverage-final.json
+lighthouse*.report.*
+lighthouse-*.report.*
+*.lcov
 .DS_Store
 *.log
 .env*

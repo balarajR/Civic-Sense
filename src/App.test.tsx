@@ -124,7 +124,7 @@ describe('App', () => {
 
   it('handles desktop mode change and closes panel', async () => {
     await act(async () => { render(<App />); });
-    const journeyButton = screen.getAllByText('JOURNEY')[0]; // First one might be desktop
+    const journeyButton = screen.getAllByText(/JOURNEY/i)[0]; // First one might be desktop
     await act(async () => { fireEvent.click(journeyButton!); });
     expect(await screen.findByRole('region', { name: /Active tool/i })).toBeInTheDocument();
     
@@ -137,7 +137,7 @@ describe('App', () => {
 
   it('advances journey stage when onNext is called', async () => {
     await act(async () => { render(<App />); });
-    const journeyButton = screen.getAllByText('JOURNEY')[0];
+    const journeyButton = screen.getAllByText(/JOURNEY/i)[0];
     await act(async () => { fireEvent.click(journeyButton!); });
     
     const nextBtn = await screen.findByTestId('next-journey-btn');
@@ -147,7 +147,7 @@ describe('App', () => {
 
   it('completes quiz and shows score when onComplete is called', async () => {
     await act(async () => { render(<App />); });
-    const quizButton = screen.getAllByText('CIVIC QUIZ')[0];
+    const quizButton = screen.getAllByText(/CIVIC QUIZ/i)[0];
     await act(async () => { fireEvent.click(quizButton!); });
     
     const completeBtn = await screen.findByTestId('complete-quiz-btn');
@@ -294,7 +294,7 @@ describe('App', () => {
     for (const tool of tools) {
       if (tool === 'MYTH BUSTER') continue; // general mode
       
-      const buttons = screen.getAllByText(tool);
+      const buttons = screen.getAllByText(new RegExp(tool, 'i'));
       await act(async () => { fireEvent.click(buttons[0]!); });
       expect(await screen.findByRole('region')).toBeInTheDocument();
     }

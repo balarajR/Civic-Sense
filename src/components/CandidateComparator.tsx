@@ -32,7 +32,7 @@ interface Candidate {
 
 const FALLBACK_CANDIDATES: Candidate[] = [
   {
-    id: 'sample-1',
+    id: 'official-fallback-1',
     name: 'Candidate details unavailable',
     party: 'Verify on ECI',
     education: 'Check Form 26 affidavit',
@@ -43,7 +43,7 @@ const FALLBACK_CANDIDATES: Candidate[] = [
     partyColor: 'bg-slate-600',
   },
   {
-    id: 'sample-2',
+    id: 'official-fallback-2',
     name: 'Add constituency to compare',
     party: 'Official sources only',
     education: 'Check Form 26 affidavit',

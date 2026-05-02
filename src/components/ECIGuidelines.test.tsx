@@ -153,15 +153,14 @@ describe('ECIGuidelines Component', () => {
   });
 
   it('should handle AI summarization failure gracefully', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     global.fetch = vi.fn(() => Promise.reject(new Error('API Down'))) as unknown as typeof fetch;
     render(<ECIGuidelines />);
     const summarizeBtns = screen.getAllByText('AI Summarize');
     fireEvent.click(summarizeBtns[0]!);
 
     await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalled();
+      expect(screen.getByText('Summarized')).toBeInTheDocument();
+      expect(screen.getByText(/verify the latest rule on eci\.gov\.in/i)).toBeInTheDocument();
     });
-    consoleSpy.mockRestore();
   });
 });

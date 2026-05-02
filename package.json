@@ -15,7 +15,7 @@
     "test:coverage": "vitest run --coverage --config vitest.config.ts",
     "audit": "npm audit --audit-level=high",
     "audit:fix": "npm audit fix",
-    "check-deps": "npx depcheck",
+    "check-deps": "npx depcheck --ignores=tailwindcss",
     "start": "NODE_ENV=production node --import tsx server.ts"
   },
   "dependencies": {
@@ -45,12 +45,10 @@
     "@testing-library/react": "^16.3.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
-    "@types/jest": "^30.0.0",
     "@types/node": "^22.14.0",
     "@types/react-dom": "^19.2.3",
     "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.5",
-    "autoprefixer": "^10.4.21",
     "depcheck": "^1.4.7",
     "jsdom": "^29.1.1",
     "supertest": "^7.2.2",

@@ -2,7 +2,7 @@
  * @file   server.ts
  * @module Server
  * @description Express server for the CivicSense AI election assistant.
- *              Provides REST API endpoints for chat (Gemini), candidate data
+ *              Provides REST API endpoints for chat (Vertex AI Gemini), candidate data
  *              (data.gov.in + AI fallback), election timeline, live results,
  *              ECI guideline summarization, and news headlines. All responses
  *              are cached with configurable TTLs for performance.
@@ -22,6 +22,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import net from 'node:net';
 import { GoogleGenAI } from '@google/genai';
 import { buildLocalElectionAnswer, sanitizeInput, safeJsonParse } from './src/server/utils';
 import { logger } from './src/utils/logger';
@@ -179,7 +180,50 @@ const cache = new ResponseCache();
 // Constants
 // ────────────────────────────────────────────────────────────
 
-const PORT = Number(process.env.PORT) || DEFAULT_PORT;
+const DEFAULT_HMR_PORT = 24678;
+
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const tester = net.createServer();
+
+    tester.once('error', () => resolve(false));
+    tester.once('listening', () => {
+      tester.close(() => resolve(true));
+    });
+
+    tester.listen(port, '0.0.0.0');
+  });
+}
+
+async function findAvailablePort(preferredPort: number): Promise<number> {
+  if (await isPortAvailable(preferredPort)) {
+    return preferredPort;
+  }
+
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+
+    server.once('error', (error) => reject(error));
+    server.once('listening', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close(() => reject(new Error('Failed to resolve an available port.')));
+        return;
+      }
+
+      const { port } = address;
+      server.close((closeError) => {
+        if (closeError) {
+          reject(closeError);
+          return;
+        }
+        resolve(port);
+      });
+    });
+
+    server.listen(0, '0.0.0.0');
+  });
+}
 
 // ────────────────────────────────────────────────────────────
 // Vertex AI / Gemini Enterprise initialization.
@@ -358,6 +402,9 @@ function buildFallbackResults(): ElectionResults {
  */
 export async function createApp(): Promise<express.Express> {
   const app = express();
+  const requestedHmrPort = Number(process.env.HMR_PORT) || DEFAULT_HMR_PORT;
+  const hmrPort = await findAvailablePort(requestedHmrPort);
+  const isProduction = process.env.NODE_ENV === 'production';
 
   // Trust Cloud Run / GCP load balancer proxy (fixes rate-limiter X-Forwarded-For warning)
   app.set('trust proxy', 1);
@@ -370,12 +417,12 @@ export async function createApp(): Promise<express.Express> {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc:  ["'self'", "'unsafe-inline'", 'https://maps.googleapis.com'],
+        scriptSrc:  isProduction ? ["'self'", 'https://maps.googleapis.com'] : ["'self'", "'unsafe-inline'", 'https://maps.googleapis.com'],
         styleSrc:   ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         imgSrc:     ["'self'", 'data:', 'https://maps.gstatic.com', 'https://maps.googleapis.com'],
-        connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseio.com', 'https://firestore.googleapis.com'],
+        connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseio.com', 'https://firestore.googleapis.com', 'ws:', 'wss:'],
         fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
-        frameSrc:   ["'none'"],
+        frameSrc:   ["'self'", 'https://www.google.com'],
         objectSrc:  ["'none'"],
       },
     },
@@ -393,7 +440,8 @@ export async function createApp(): Promise<express.Express> {
 
   app.use(cors({
     origin: (origin, callback) => {
-      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || '');
+      if (!origin || ALLOWED_ORIGINS.includes(origin) || (process.env.NODE_ENV !== 'production' && isLocalhost)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: origin ${origin} not allowed`));
@@ -716,9 +764,20 @@ Return as a JSON array of strings. Only output the JSON array.`;
   // ── Vite Middleware (Development) / Static (Production) ─
   if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: { port: hmrPort },
+      },
       appType: 'spa',
     });
+
+    if (hmrPort !== requestedHmrPort) {
+      logger.warn('Preferred Vite HMR port unavailable, using a fallback port', {
+        requestedPort: requestedHmrPort,
+        selectedPort: hmrPort,
+      });
+    }
+
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
@@ -748,9 +807,18 @@ Return as a JSON array of strings. Only output the JSON array.`;
  * @throws {Error} If server creation or binding fails.
  */
 async function startServer(): Promise<void> {
+  const requestedPort = Number(process.env.PORT) || DEFAULT_PORT;
+  const port = await findAvailablePort(requestedPort);
   const app = await createApp();
-  app.listen(PORT, '0.0.0.0', () => {
-    logger.info('CivicSense server started', { port: PORT, url: `http://localhost:${PORT}` });
+  app.listen(port, '0.0.0.0', () => {
+    if (port !== requestedPort) {
+      logger.warn('Preferred app port unavailable, using a fallback port', {
+        requestedPort,
+        selectedPort: port,
+      });
+    }
+
+    logger.info('CivicSense server started', { port, url: `http://localhost:${port}` });
   });
 }
 

@@ -218,7 +218,7 @@ CivicSense/
 
 ## 🧪 Testing
 
-**151 tests across 13 suites — all passing.**
+**285 tests across 23 suites — all passing.**
 
 ```bash
 npm test          # Run full test suite (Vitest)

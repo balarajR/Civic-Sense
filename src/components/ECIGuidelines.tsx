@@ -16,6 +16,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Gavel, Users, UserCheck, ShieldCheck, ChevronRight, Info, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { FALLBACK_SUMMARY } from '../config/constants';
 
 /** Shape of a single ECI guideline entry. */
 interface Guideline {
@@ -94,9 +95,8 @@ export default function ECIGuidelines(): React.JSX.Element {
       });
       const data = await response.json();
       setSummaries(prev => ({ ...prev, [g.id]: data.summary }));
-    } catch (err) {
-      const entry = JSON.stringify({ level: 'error', msg: 'Summarization request failed', error: String(err), ts: new Date().toISOString() });
-      console.error(entry);
+    } catch {
+      setSummaries(prev => ({ ...prev, [g.id]: FALLBACK_SUMMARY }));
     } finally {
       setLoadingIds(prev => {
         const next = new Set(prev);

@@ -190,10 +190,8 @@ export default function App(): React.JSX.Element {
       setMessages(prev => [...prev, assistantMessage]);
       if (data.detectedPersona) setDetectedPersona(data.detectedPersona as Persona);
       if (data.currentMode) setCurrentMode(data.currentMode as InteractionMode);
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
-      const entry = JSON.stringify({ level: 'error', msg: 'Chat API request failed', error: String(error), ts: new Date().toISOString() });
-      console.error(entry);
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
@@ -239,7 +237,7 @@ export default function App(): React.JSX.Element {
       {/* Header */}
       <header className="h-20 border-b-4 border-black flex items-center justify-between px-8 bg-white shrink-0" role="banner">
         <div className="flex items-baseline gap-2">
-          <span className="text-4xl font-black tracking-tighter">CIVICSENCE</span>
+          <span className="text-4xl font-black tracking-tighter">CIVICSENSE</span>
           <span className="bg-black text-white text-[10px] font-bold px-2 py-0.5">V.2.4</span>
         </div>
         

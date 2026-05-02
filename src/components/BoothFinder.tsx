@@ -38,6 +38,10 @@ export default function BoothFinder(): React.JSX.Element {
     }
   };
 
+  const handleNavigate = () => {
+    window.open(directionsUrl, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -104,16 +108,14 @@ export default function BoothFinder(): React.JSX.Element {
                     <p className="text-[9px] font-bold opacity-60">Verify final assignment with ECI/BLO records</p>
                 </div>
               </div>
-              <a
-                href={directionsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                role="button"
+              <button
+                type="button"
+                onClick={handleNavigate}
                 className="bg-black text-white p-2 border border-black hover:bg-slate-800"
                 aria-label="Navigate to polling booth"
               >
                 <Navigation size={14} strokeWidth={3} aria-hidden="true" />
-              </a>
+              </button>
             </div>
           </div>
 

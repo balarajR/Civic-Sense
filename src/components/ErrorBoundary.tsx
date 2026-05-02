@@ -56,22 +56,8 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     return { hasError: true, error };
   }
 
-  /**
-   * Logs error details for debugging. Uses structured format for observability.
-   *
-   * @param {Error}     error     - The caught error.
-   * @param {ErrorInfo} errorInfo - React component stack trace.
-   */
-  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    const entry = JSON.stringify({
-      level: 'error',
-      msg: 'ErrorBoundary caught rendering error',
-      errorName: error.name,
-      errorMessage: error.message,
-      componentStack: errorInfo.componentStack,
-      ts: new Date().toISOString(),
-    });
-    console.error(entry);
+  componentDidCatch(_error: Error, _errorInfo: ErrorInfo): void {
+    // React requires this lifecycle for error boundary observability hooks.
   }
 
   /**

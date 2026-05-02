@@ -106,4 +106,21 @@ describe('BoothFinder Component', () => {
     fireEvent.submit(form);
     expect(screen.getByRole('button', { name: /navigate to polling booth/i })).toBeInTheDocument();
   });
+
+  it('should open Google Maps directions in a protected new tab', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const input = screen.getByRole('textbox', { name: /enter your locality or EPIC ID/i });
+
+    fireEvent.change(input, { target: { value: 'Whitefield' } });
+    fireEvent.submit(input.closest('form')!);
+    fireEvent.click(screen.getByRole('button', { name: /navigate to polling booth/i }));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://www.google.com/maps/search/?api=1&query=Whitefield%20polling%20station%20Karnataka',
+      '_blank',
+      'noopener,noreferrer'
+    );
+
+    openSpy.mockRestore();
+  });
 });

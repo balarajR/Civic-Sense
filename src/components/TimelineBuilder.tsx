@@ -57,9 +57,7 @@ export default function TimelineBuilder({ events: initialEvents }: TimelineBuild
           setEvents(data.timeline);
         }
       })
-      .catch((err) => {
-        const entry = JSON.stringify({ level: 'error', msg: 'Timeline fetch failed', error: String(err), ts: new Date().toISOString() });
-        console.error(entry);
+      .catch(() => {
         setEvents(FALLBACK_TIMELINE);
       })
       .finally(() => setLoading(false));
