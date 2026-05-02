@@ -52,7 +52,9 @@ COPY --from=builder /app/dist ./dist
 # Copy server source (TypeScript — executed via tsx at runtime)
 COPY server.ts ./
 COPY tsconfig.json ./
+COPY src/config ./src/config
 COPY src/server ./src/server
+COPY src/utils ./src/utils
 
 # Run as non-root for security best practice
 RUN addgroup --system --gid 1001 nodejs \
