@@ -60,6 +60,15 @@ describe('TimelineBuilder Component', () => {
     expect(emptyMsg).toBeInTheDocument();
   });
 
+  it('should keep empty state when API response has no timeline key', async () => {
+    mockFetch.mockResolvedValueOnce({
+      json: () => Promise.resolve({}),
+    });
+    render(<TimelineBuilder />);
+
+    expect(await screen.findByText(/No schedule announced/)).toBeInTheDocument();
+  });
+
   it('should render CTA button when event has a cta field', () => {
     const events = [
       { title: 'Event', date: '2025-01-01', description: 'Desc', cta: 'Learn More' },

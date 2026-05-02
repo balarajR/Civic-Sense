@@ -122,6 +122,24 @@ describe('ActionHub Component', () => {
     expect(liveTab).toHaveAttribute('aria-selected', 'false');
   });
 
+  it('should switch back to Live Results from another tab', async () => {
+    await act(async () => {
+      render(<ActionHub />);
+    });
+    const boothTab = screen.getByRole('tab', { name: /polling booth/i });
+    const liveTab = screen.getByRole('tab', { name: /live election data/i });
+
+    await act(async () => {
+      fireEvent.click(boothTab);
+    });
+    await act(async () => {
+      fireEvent.click(liveTab);
+    });
+
+    expect(liveTab).toHaveAttribute('aria-selected', 'true');
+    expect(liveTab).toHaveClass('bg-black');
+  });
+
   it('should render the tablist container with proper ARIA', async () => {
     await act(async () => {
       render(<ActionHub />);

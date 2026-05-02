@@ -35,6 +35,16 @@ describe('validateEnv', () => {
     expect(() => validateEnv()).not.toThrow();
   });
 
+  it('does not warn when optional variables are configured', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    process.env.GOOGLE_CLOUD_PROJECT = 'test-project';
+    process.env.DATA_GOV_IN_API_KEY = 'data-key';
+    process.env.VITE_GOOGLE_MAPS_API_KEY = 'maps-key';
+
+    expect(() => validateEnv()).not.toThrow();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   it('throws an error when neither GOOGLE_CLOUD_PROJECT nor GCP_PROJECT_ID is set', () => {
     delete process.env.GOOGLE_CLOUD_PROJECT;
     delete process.env.GCP_PROJECT_ID;
