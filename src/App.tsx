@@ -12,7 +12,7 @@
  * @exports      App (default)
  */
 
-import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Vote,
   MapPin,
@@ -27,12 +27,21 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import ChatInterface from './components/ChatInterface';
 import ErrorBoundary from './components/ErrorBoundary';
+import NewsTicker from './components/NewsTicker';
+import { FALLBACK_NEWS_HEADLINES } from './config/constants';
+import { getTimelineEventsFromMessages } from './utils/timelineMetadata';
+import { Message, Persona, InteractionMode, QuizQuestion } from './types';
+import { cn } from './lib/utils';
 
 /** Lazy-load heavy components to reduce initial bundle & unused JS. */
 const JourneySimulator = lazy(() => import('./components/JourneySimulator'));
 const CivicQuiz = lazy(() => import('./components/CivicQuiz'));
-import { Message, Persona, InteractionMode, QuizQuestion } from './types';
-import { cn } from './lib/utils';
+const TimelineBuilder = lazy(() => import('./components/TimelineBuilder'));
+const ActionHub = lazy(() => import('./components/ActionHub'));
+
+const NEWS_API_URL = '/api/news.json';
+const CHAT_API_URL = '/api/chat';
+const MAX_JOURNEY_STAGE = 5;
 
 /** Welcome message shown on first load before any user interaction. */
 const INITIAL_MESSAGE: Message = {
@@ -64,26 +73,18 @@ const DUMMY_QUIZ: QuizQuestion[] = [
     }
 ];
 
-const TimelineBuilder = lazy(() => import('./components/TimelineBuilder'));
-const ActionHub = lazy(() => import('./components/ActionHub'));
-import NewsTicker from './components/NewsTicker';
-
-/** Sidebar navigation items — declared outside to avoid re-allocation each render */
-const SIDEBAR_NAV = [
-  { id: '01', icon: Vote, label: "JOURNEY", mode: InteractionMode.JOURNEY_SIMULATOR },
-  { id: '02', icon: ShieldCheck, label: "MYTH BUSTER", mode: InteractionMode.GENERAL },
-  { id: '03', icon: Award, label: "CIVIC QUIZ", mode: InteractionMode.CIVIC_QUIZ },
-  { id: '04', icon: Calendar, label: "TIMELINE", mode: InteractionMode.TIMELINE_BUILDER },
-  { id: '05', icon: Search, label: "ACTION HUB", mode: InteractionMode.ACTION_HUB },
+/** Tool navigation items — declared once so desktop and mobile stay in sync. */
+const TOOL_NAV = [
+  { id: '01', icon: Vote, label: 'JOURNEY', mode: InteractionMode.JOURNEY_SIMULATOR },
+  { id: '02', icon: ShieldCheck, label: 'MYTH BUSTER', mode: InteractionMode.GENERAL },
+  { id: '03', icon: Award, label: 'CIVIC QUIZ', mode: InteractionMode.CIVIC_QUIZ },
+  { id: '04', icon: Calendar, label: 'TIMELINE', mode: InteractionMode.TIMELINE_BUILDER },
+  { id: '05', icon: Search, label: 'ACTION HUB', mode: InteractionMode.ACTION_HUB },
 ] as const;
 
-const MOBILE_NAV = [
-  { label: "01 JOURNEY", mode: InteractionMode.JOURNEY_SIMULATOR },
-  { label: "02 MYTH BUSTER", mode: InteractionMode.GENERAL },
-  { label: "03 CIVIC QUIZ", mode: InteractionMode.CIVIC_QUIZ },
-  { label: "04 TIMELINE", mode: InteractionMode.TIMELINE_BUILDER },
-  { label: "05 ACTION HUB", mode: InteractionMode.ACTION_HUB },
-] as const;
+function createMessageId(role: Message['role']): string {
+  return `${role}-${crypto.randomUUID()}`;
+}
 
 /**
  * App — Root application component. Manages global state (messages, persona,
@@ -98,31 +99,24 @@ export default function App(): React.JSX.Element {
   const [currentMode, setCurrentMode] = useState<InteractionMode>(InteractionMode.GENERAL);
   const [news, setNews] = useState<string[]>([]);
 
-  // AbortController ref — cancels in-flight fetch on component unmount or new request
+  // Cancels in-flight fetches on component unmount or a newer chat request.
   const abortRef = useRef<AbortController | null>(null);
-
-  /** Fallback headlines when API isn't available (static hosting / Lighthouse). */
-  const FALLBACK_NEWS = [
-    "ECI launches nationwide voter awareness campaign for 2026",
-    "Digital voter ID cards now accepted at polling booths across India",
-    "Record 67.4% voter turnout in recent Karnataka local body elections",
-  ];
+  const requestSequenceRef = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/news.json', { signal: controller.signal })
+    fetch(NEWS_API_URL, { signal: controller.signal })
       .then(res => {
         if (!res.ok) throw new Error('API unavailable');
         return res.json();
       })
       .then((data: { news?: string[] }) => {
         if (data.news?.length) setNews(data.news);
-        else setNews(FALLBACK_NEWS);
+        else setNews([...FALLBACK_NEWS_HEADLINES]);
       })
       .catch(err => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        // Use fallback headlines when API is unreachable
-        setNews(FALLBACK_NEWS);
+        setNews([...FALLBACK_NEWS_HEADLINES]);
       });
 
     return () => controller.abort();
@@ -131,6 +125,7 @@ export default function App(): React.JSX.Element {
   const [journeyStage, setJourneyStage] = useState(1);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [civicScore, setCivicScore] = useState<number | null>(null);
+  const timelineEvents = useMemo(() => getTimelineEventsFromMessages(messages), [messages]);
 
   /**
    * Sends a user message to the chat API and appends the assistant reply.
@@ -143,14 +138,17 @@ export default function App(): React.JSX.Element {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const requestId = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestId;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: createMessageId('user'),
       role: 'user',
       content,
       timestamp: new Date(),
     };
 
+    const allMessages = [...messages, userMessage];
     setMessages(prev => {
       const newMessages = [...prev, userMessage];
       // Fire async fetch (can't await in setState callback, so we do it outside)
@@ -159,11 +157,8 @@ export default function App(): React.JSX.Element {
 
     setIsLoading(true);
 
-    // Need to read current messages + new user message
-    const allMessages = [...messages, userMessage];
-
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(CHAT_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: allMessages }),
@@ -178,7 +173,7 @@ export default function App(): React.JSX.Element {
       };
       
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: createMessageId('assistant'),
         role: 'assistant',
         content: data.reply || "I'm processing your request.",
         timestamp: new Date(),
@@ -193,19 +188,22 @@ export default function App(): React.JSX.Element {
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setMessages(prev => [...prev, {
-        id: Date.now().toString(),
+        id: createMessageId('assistant'),
         role: 'assistant',
         content: "I'm having trouble connecting directly to the election data center. Please ensure your API key is correctly configured in settings.",
         timestamp: new Date(),
       }]);
     } finally {
-      setIsLoading(false);
+      if (requestSequenceRef.current === requestId) {
+        setIsLoading(false);
+        abortRef.current = null;
+      }
     }
   }, [messages]);
 
   /** Advances the journey simulator to the next stage (max 5). */
   const handleNextJourneyStage = useCallback(() => {
-    setJourneyStage(s => Math.min(s + 1, 5));
+    setJourneyStage(s => Math.min(s + 1, MAX_JOURNEY_STAGE));
   }, []);
 
   /** Persists the user's civic quiz score when the quiz finishes. */
@@ -280,7 +278,7 @@ export default function App(): React.JSX.Element {
             {/* Navigation Buttons */}
             <nav aria-label="Tool navigation">
               <div className="space-y-4">
-                {SIDEBAR_NAV.map((tool) => (
+                {TOOL_NAV.map((tool) => (
                   <button
                     key={tool.label}
                     onClick={() => handleModeChange(tool.mode)}
@@ -381,7 +379,7 @@ export default function App(): React.JSX.Element {
                                       />
                                   )}
                                   {currentMode === InteractionMode.TIMELINE_BUILDER && (
-                                      <TimelineBuilder events={messages.find(m => m.mode === InteractionMode.TIMELINE_BUILDER)?.metadata?.events as Array<{title: string; date: string; description: string}> | undefined} />
+                                      <TimelineBuilder events={timelineEvents} />
                                   )}
                                   {currentMode === InteractionMode.ACTION_HUB && (
                                       <ActionHub />
@@ -441,14 +439,14 @@ export default function App(): React.JSX.Element {
                     <div className="p-6 space-y-4 flex-1 overflow-y-auto">
                         <nav aria-label="Mobile navigation">
                             <div className="space-y-4">
-                                {MOBILE_NAV.map((item) => (
+                                {TOOL_NAV.map((item) => (
                                     <button
                                         key={item.label}
                                         onClick={() => handleMobileModeChange(item.mode)}
                                         aria-pressed={currentMode === item.mode}
                                         className="w-full text-left p-4 border-2 border-black font-black hover:bg-black hover:text-white transition-all flex justify-between items-center"
                                     >
-                                        {item.label}
+                                        {item.id} {item.label}
                                         <ArrowRight size={18} strokeWidth={3} aria-hidden="true" />
                                     </button>
                                 ))}

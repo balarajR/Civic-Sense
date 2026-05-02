@@ -218,7 +218,7 @@ CivicSense/
 
 ## 🧪 Testing
 
-**285 tests across 23 suites — all passing.**
+**292 tests across 24 suites — all passing.**
 
 ```bash
 npm test          # Run full test suite (Vitest)
@@ -227,7 +227,7 @@ npm run test:watch  # Watch mode during development
 
 | Suite | File | Tests | What it covers |
 |-------|------|-------|----------------|
-| Unit | `src/server/utils.test.ts` | 30+ | sanitization, JSON parsing, local election fallbacks |
+| Unit | `src/server/utils.test.ts`, `src/utils/*.test.ts` | 40+ | sanitization, JSON parsing, local election fallbacks, reusable UI metadata guards |
 | Component | `src/components/*.test.tsx` | 100+ | React tools, accessibility labels, fallbacks, interactions |
 | Integration | `src/server/api.test.ts` | 20+ | API endpoints with mocked Vertex AI/Gemini responses |
 
